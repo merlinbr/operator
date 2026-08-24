@@ -42,6 +42,9 @@ func _ready() -> void:
 	_build_shell()
 	if ticker != null:
 		ticker.start_rotation()
+	if is_inside_tree():
+		await get_tree().process_frame
+		_apply_layout()
 
 ## The headless test harness adds nodes to a root that is not yet inside the
 ## tree, so _enter_tree/_ready never fire there. NOTIFICATION_PARENTED does
