@@ -41,8 +41,10 @@ Add two fields alongside the existing `workspace_collapsed`:
 - `active_module: StringName` — the currently selected module id (`&""` when none).
 - `module_open: bool` — whether the active module's primary panel is showing.
 
-`workspace_collapsed: bool` is unchanged. Follow the existing one-signal-per-state pattern by
-adding two signals with property setters that emit them:
+`workspace_collapsed: bool` is unchanged. Add two signals plus explicit setter methods that
+emit **only on change**, mirroring the existing `set_workspace_collapsed()` guard pattern
+(not the unconditional `set(value):` property blocks used by credits/heat/etc., since a change
+guard is required here):
 
 ```
 signal active_module_changed(id: StringName)
@@ -50,21 +52,43 @@ signal module_open_changed(open: bool)
 
 var active_module: StringName = &""
 var module_open := false
+
+func set_active_module(id: StringName) -> void:
+	if active_module == id:
+		return
+	active_module = id
+	active_module_changed.emit(id)
+
+func set_module_open(open: bool) -> void:
+	if module_open == open:
+		return
+	module_open = open
+	module_open_changed.emit(open)
 ```
 
-Each field has a setter that emits its signal only on change (mirroring the existing
-`set_workspace_collapsed` guard). `main.gd` connects to these to drive the rail highlight and
-the visibility rules.
+`main.gd` connects to these signals to drive the rail highlight and the visibility rules.
 
 ### 1.3 Behaviors
 
 | Input | Result |
 |---|---|
 | Click **active** rail icon | Toggle closed → `module_open=false` → primary hides, highlight clears, environment shows through |
+| Click the **same** rail icon again | Toggle back open → `module_open=true` → primary re-shows |
 | Click **different** rail icon | Switch → `active_module=id`, `module_open=true`; any open context panel is closed |
 | **Esc** | Close topmost: context open → close context *else* primary open → close primary *else* nothing |
 | Top-right **Collapse/Expand** | Toggle `workspace_collapsed`. Collapse hides primary+context (chip/rail/ticker + environment remain). Expand restores primary *if* `module_open` |
 | Click any rail icon **while collapsed** | Un-collapse, then open that module |
+
+Invariant: toggling a module closed keeps `active_module` set (so a second click re-opens the
+same module) and only flips `module_open` to false — it does **not** change
+`workspace_collapsed`. A rail icon is highlighted only while `active_module == id AND
+module_open AND !workspace_collapsed`.
+
+**Modules with no registered scene** (currently `alerts`, which is unlocked in the rail but has
+no `MODULE_SCENES` entry) are **no-ops**: `select_module` early-returns, so clicking their rail
+icon neither switches nor opens anything. This is called out explicitly because it is a
+pre-existing dead button; Phase 1 keeps it as a no-op rather than breaking the interaction
+model. See Out of scope.
 
 ### 1.4 Visibility rules (`main.gd`)
 
@@ -81,14 +105,27 @@ alongside an open primary).
 - `select_module(id)` in `main.gd` becomes the single entry point guarding all the state
   transitions above. It stays the only place that rebuilds the primary panel and updates the
   rail active highlight. A single guard, not scattered callers.
+- **icon_rail** API changes. Today `set_active(id)` only encodes which module is active, and
+  the rail has no reference to `GameState`. Under the new highlight rule (cyan only when
+  `active ∧ open ∧ not collapsed`), `main.gd` computes the lit state and passes it in:
+
+  ```
+  icon_rail.set_active(id: StringName, lit: bool)
+  ```
+
+  `lit` controls whether the *active* button is highlighted cyan. With `lit == false` the
+  active button renders in its normal (white / locked-dim) state, which is what happens when a
+  module is toggled closed or the workspace is collapsed. Locked modules stay dimmed regardless.
+
+  This is a **breaking change to `icon_rail.set_active`** — `test_icon_rail.gd:31-35` currently
+  calls `set_active(&"comms")` and expects cyan; it becomes `set_active(&"comms", true)` for
+  cyan and `set_active(&"comms", false)` for unlit.
+
 - **Esc** is handled once in `main.gd` via an `_unhandled_input` handler (or a
   `ui_cancel`-bound shortcut). Do not scatter Esc handling across panels.
 - **Top-right button** becomes a labeled text button: `"Collapse Workspace"` shown when not
   collapsed, `"Expand Workspace"` when collapsed (text + tooltip), replacing the bare `⧉`
   glyph.
-- **icon_rail** highlight rule: a rail icon is highlighted (cyan) only when it is the active
-  module *and* the panel is open *and* the workspace is not collapsed. Locked modules stay
-  dimmed.
 
 ### 1.6 Testing
 
@@ -128,28 +165,38 @@ as a fraction of the **inset content region** (see 2.3):
 | `wide` | ~78% | ~82% | maps / markets (future) |
 | `context` | ~31% | mirrors primary | contextual side panel |
 
-Assignments: `home → compact`, `comms → normal`, `contracts → narrow`. `contract_detail`
-(the context panel) is not a registry module, so its `context` size is a constant in
-`main.gd`, not on a `ModuleDef`.
+Assignments: `home → compact`, `comms → normal`, `contracts → narrow`. `alerts` has no scene
+in this slice, so it gets no size class yet. `contract_detail` (the context panel) is the one
+consumer of the `context` class.
 
 ### 2.3 Layout algorithm (`main.gd` `_apply_layout`)
 
 1. Compute the **inset content region**: start from the existing `panel_left` / `content_top`
    origin, then push in by a consistent `PANEL_INSET` (~18px) on *all* sides so panels float
-   clear of the rail, the top status area, the right margin, and the ticker.
+   clear of the rail, the top status area, the right margin, and the ticker. (Note:
+   `panel_left` already clears the rail via `RAIL_GAP`; the inset is an additional float.)
 2. **Primary panel** → top-left anchored at the region origin, sized to its class fractions.
 3. **Context panel** (when open) → `context` class width (~31%), top and height **mirror the
    primary** so they always align. Placed to the right of the primary with the existing
-   `CONTEXT_GAP`. If primary + gap + context would exceed the region width, the primary
-   **shrinks** to fit (context keeps its width).
+   `CONTEXT_GAP`. Both always fit: with the current assignments the widest total is `normal`
+   (60%) + `context` (31%) = 91% < 100%, so the primary never needs to shrink.
 4. Panels no longer stretch to fill; unused space on the right/below remains visible
    environment.
+
+**Removed:** the old `CONTEXT_SPLIT` (0.62) ratio and its "shrink primary to fit" branch
+(`main.gd:27`, used at `:219-225`). They only exist to serve a future `wide` module
+(78% + 31% = 109%, which would overflow). No `wide` module exists in this slice, so this is
+speculative flexibility for maps/markets that aren't built yet. **Defer the shrink rule until a
+`wide` module is introduced** (YAGNI — nothing exercises it today). Deleting `CONTEXT_SPLIT`
+is part of the clean cutover.
 
 ### 2.4 Testing
 
 Update `tests/test_main.gd` layout assertions: primary and context no longer fill the region;
-a non-zero environment region remains; primary shrinks when context opens. Add a check that
-the Home panel sizes to `compact`.
+a non-zero environment region remains; primary **keeps its class width** when context opens.
+(The existing `test_main.gd:27` "primary shrinks when context opens" assertion is **removed** —
+under `narrow` the contracts primary is 44% whether or not context is open, so it would flip
+false.) Add a check that the Home panel sizes to `compact`.
 
 ---
 
@@ -166,12 +213,14 @@ Rewrite `scenes/main/rain.gdshader` (a single `canvas_item` fragment shader, unc
 attachment in `environment.gd`) to render **three depth layers — Near / Mid / Far** in one
 pass. `environment.gd` needs no structural change.
 
-**Technique (borrowed, per the reference shaders):** use the analytic O(1) grid approach from
-"Rain and Snow with Parallax Effect" (Brian Smith, MIT) — derive per-column variation with a
-`fract(sin(...))` hash, and gate horizontal thickness via the `mod()` cell remainder. This is
-one procedural evaluation per layer, **no `for` loop over drops**, so a fullscreen 1920×1080
-pass stays cheap. The `for`-loop approach in the "Simple rain/snow shader" is explicitly
-**not** used (loops over `count` drops per fragment).
+**Technique (borrowed from the reference shaders):** the current `rain.gdshader` is already
+O(1) per fragment (a `fract(sin(...))` hash + `step` gate + `smoothstep` streak, no loop). This
+rewrite keeps that cost profile and restructures it into **three summed layer evaluations**,
+borrowing the per-column grid variation — a `fract(sin(...))` hash for random speed/length and a
+`mod()` cell remainder for horizontal thickness — from "Rain and Snow with Parallax Effect"
+(Brian Smith, MIT). Each layer is a single procedural evaluation. (The loop-based "Simple
+rain/snow shader" iterates `count` drops per fragment and is not used, but that's a perf
+side-note, not the reason for the approach.)
 
 **Layer parameters** (one `rain_layer(...)` helper evaluated 3×; slant kept broadly consistent,
 depth comes mainly from speed/thickness/length/density/alpha):
@@ -191,6 +240,8 @@ depth comes mainly from speed/thickness/length/density/alpha):
 - **Angled:** a small per-layer shear of `UV.x` by `UV.y` so drops fall a few degrees
   off-vertical; kept broadly consistent across layers (depth from other params, not angle).
 - **Varied speed & length:** per-column `rn` hash drives both.
+- **Compositing:** the three layer contributions are **summed** (`a = near + mid + far`), then
+  `COLOR = vec4(color.rgb, a * intensity)` — not max/overwrite.
 - **Color:** single light rain color `vec4(0.706, 0.863, 1.0, 1.0)`; the Near layer reads
   brighter via higher alpha.
 
@@ -207,6 +258,10 @@ a deliberate simplification. Keep any existing shader sanity checks (if present)
 
 - Panel dragging / free window management.
 - Real game content behind the modules.
+- An `alerts` module scene/content. `alerts` is unlocked in the rail but has no scene and no
+  `MODULE_SCENES` entry, so it stays a **no-op** rail button this slice. Phase 1 keeps
+  `select_module` tolerant of modules that have no registered scene.
+- The "primary shrinks when context opens" rule until a `wide` module exists.
 - Major environment shader work beyond the rain.
 - Responsive layout below 1280×720 (unchanged).
 
@@ -225,11 +280,14 @@ a deliberate simplification. Keep any existing shader sanity checks (if present)
 
 ## File changes
 
-- `autoload/game_state.gd` — add `active_module`, `module_open` + signals.
-- `scenes/main/main.gd` — rework `select_module`, Esc handler, visibility rules, labeled
-  collapse button, panel-inset sizing algorithm, size-class constant map.
-- `scenes/ui/icon_rail.gd` — highlight rule tied to `module_open`/collapse.
+- `autoload/game_state.gd` — add `active_module` + `module_open`, `set_active_module()` /
+  `set_module_open()` methods, and their signals.
+- `scenes/main/main.gd` — rework `select_module` (incl. no-op guard for scene-less modules),
+  add Esc handler, visibility rules, labeled collapse button, panel-inset sizing algorithm,
+  size-class constant map; **delete `CONTEXT_SPLIT`** and its shrink-primary branch.
+- `scenes/ui/icon_rail.gd` — change `set_active(id)` → `set_active(id, lit)`.
 - `scripts/module_def.gd` — add `size_class`.
-- `scripts/module_registry.tres` / module defs — set size classes for home/comms/contracts.
-- `scenes/main/rain.gdshader` — rewrite to 3-layer O(1) rain.
-- `tests/test_main.gd`, `tests/test_icon_rail.gd` — update for new behavior/visibility.
+- `resources/module_registry.tres` / module defs — set size classes for home/comms/contracts.
+- `scenes/main/rain.gdshader` — rewrite to 3-layer summed rain.
+- `tests/test_main.gd` — new interaction/visibility assertions; remove the shrink assertion.
+- `tests/test_icon_rail.gd` — update `set_active(id, lit)` contract.
