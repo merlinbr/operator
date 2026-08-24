@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="ModuleRegistry" load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/module_registry.gd" id="1_reg"]
+[ext_resource type="Script" path="res://scripts/module_def.gd" id="2_def"]
+
+[sub_resource type="Resource" id="def_home"]
+script = ExtResource("2_def")
+id = &"home"
+display_name = "HOME"
+glyph = "◈"
+group = &"core"
+unlocked = true
+
+[sub_resource type="Resource" id="def_comms"]
+script = ExtResource("2_def")
+id = &"comms"
+display_name = "COMMS"
+glyph = "✉"
+group = &"core"
+unlocked = true
+
+[sub_resource type="Resource" id="def_contracts"]
+script = ExtResource("2_def")
+id = &"contracts"
+display_name = "CONTRACTS"
+glyph = "▣"
+group = &"core"
+unlocked = true
+
+[sub_resource type="Resource" id="def_crew"]
+script = ExtResource("2_def")
+id = &"crew"
+display_name = "CREW"
+glyph = "≋"
+group = &"operational"
+unlocked = false
+
+[sub_resource type="Resource" id="def_market"]
+script = ExtResource("2_def")
+id = &"market"
+display_name = "MARKET"
+glyph = "◇"
+group = &"operational"
+unlocked = false
+
+[sub_resource type="Resource" id="def_map"]
+script = ExtResource("2_def")
+id = &"map"
+display_name = "MAP"
+glyph = "⌖"
+group = &"operational"
+unlocked = false
+
+[sub_resource type="Resource" id="def_alerts"]
+script = ExtResource("2_def")
+id = &"alerts"
+display_name = "ALERTS"
+glyph = "!"
+group = &"utility"
+unlocked = true
+
+[resource]
+script = ExtResource("1_reg")
+modules = [SubResource("def_home"), SubResource("def_comms"), SubResource("def_contracts"), SubResource("def_crew"), SubResource("def_market"), SubResource("def_map"), SubResource("def_alerts")]
