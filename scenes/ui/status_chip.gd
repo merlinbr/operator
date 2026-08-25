@@ -6,6 +6,7 @@ signal collapse_requested
 const GameStateScript := preload("res://autoload/game_state.gd")
 const COLOR_AMBER := Color(1.0, 0.82353, 0.47843)
 const STATUS_DIVIDER_MARGIN := 16
+const COMPACT_FIELD_WIDTH := 80.0
 
 var _gs: Node
 var _credits_label: Label
@@ -32,6 +33,10 @@ func _build_children() -> void:
 	_district_label = Label.new()
 	_day_label = Label.new()
 	_time_label = Label.new()
+	_day_label.custom_minimum_size.x = COMPACT_FIELD_WIDTH
+	_day_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_time_label.custom_minimum_size.x = COMPACT_FIELD_WIDTH
+	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(_credits_label)
 	_add_status_divider(row)
 	row.add_child(_district_label)
@@ -39,9 +44,6 @@ func _build_children() -> void:
 	row.add_child(_day_label)
 	_add_status_divider(row)
 	row.add_child(_time_label)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
 	row.add_child(VSeparator.new())
 	_collapse_button = Button.new()
 	_collapse_button.name = "WorkspaceAction"
