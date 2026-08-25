@@ -24,7 +24,7 @@ func setup(registry: ModuleRegistry) -> void:
 func get_button(id: StringName) -> Button:
 	return _buttons.get(id)
 
-func set_active(id: StringName, lit: bool = true) -> void:
+func set_active(id: StringName, lit: bool) -> void:
 	_active = id
 	for btn_id: StringName in _buttons:
 		var btn: Button = _buttons[btn_id]

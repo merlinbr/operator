@@ -245,7 +245,9 @@ func _apply_layout() -> void:
 	var chip_min: Vector2 = status_chip.get_combined_minimum_size()
 	status_chip.position = Vector2((ws_size.x - chip_min.x) * 0.5, CHIP_TOP)
 	status_chip.size = chip_min
-	collapse_button.position = Vector2(ws_size.x - MARGIN - collapse_button.custom_minimum_size.x, CHIP_TOP)
+	var collapse_min: Vector2 = collapse_button.get_combined_minimum_size()
+	collapse_button.position = Vector2(ws_size.x - MARGIN - collapse_min.x, CHIP_TOP)
+	collapse_button.size = collapse_min
 	var content_top: float = CHIP_TOP + status_chip.size.y + CHIP_GAP
 	var content_bottom: float = ws_size.y - TICKER_HEIGHT - MARGIN
 	icon_rail.position = Vector2(MARGIN, content_top)

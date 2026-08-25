@@ -82,6 +82,7 @@ func _run() -> void:
 	# collapse button is a labeled button
 	var collapse_btn: Button = workspace.get_node("CollapseToggle")
 	check(collapse_btn.text == "Collapse Workspace", "collapse button labeled")
+	check(collapse_btn.size.x > 0.0 and collapse_btn.size.y > 0.0, "collapse button has clickable size")
 
 	main.queue_free()
 	gs.queue_free()

@@ -20,7 +20,7 @@ float rain_layer(vec2 uv, float density, float slant, float speed_base,
 	float length = len_base + len_var * rn;
 	float y = fract(p.y + rn);
 	float trail = smoothstep(1.0 - length, 1.0, fract(y - TIME * speed));
-	float thickness = step(remainder * density, width_frac);
+	float thickness = step(abs(remainder * density - 0.5), width_frac * 0.5);
 	return trail * thickness * alpha;
 }
 
