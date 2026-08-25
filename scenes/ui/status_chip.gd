@@ -5,6 +5,7 @@ signal collapse_requested
 
 const GameStateScript := preload("res://autoload/game_state.gd")
 const COLOR_AMBER := Color(1.0, 0.82353, 0.47843)
+const STATUS_DIVIDER_MARGIN := 16
 
 var _gs: Node
 var _credits_label: Label
@@ -32,8 +33,11 @@ func _build_children() -> void:
 	_day_label = Label.new()
 	_time_label = Label.new()
 	row.add_child(_credits_label)
+	_add_status_divider(row)
 	row.add_child(_district_label)
+	_add_status_divider(row)
 	row.add_child(_day_label)
+	_add_status_divider(row)
 	row.add_child(_time_label)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -45,6 +49,15 @@ func _build_children() -> void:
 	_collapse_button.focus_mode = Control.FOCUS_ALL
 	_collapse_button.pressed.connect(_on_workspace_action_pressed)
 	row.add_child(_collapse_button)
+
+func _add_status_divider(row: HBoxContainer) -> void:
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_theme_constant_override("margin_left", STATUS_DIVIDER_MARGIN)
+	margin.add_theme_constant_override("margin_right", STATUS_DIVIDER_MARGIN)
+	var divider := VSeparator.new()
+	margin.add_child(divider)
+	row.add_child(margin)
 
 func setup(gs: Node) -> void:
 	_build_children()
