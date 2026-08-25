@@ -28,10 +28,10 @@ func set_active(id: StringName, lit: bool = true) -> void:
 	_active = id
 	for btn_id: StringName in _buttons:
 		var btn: Button = _buttons[btn_id]
-		if btn_id == _active and lit:
-			btn.modulate = COLOR_ACCENT
-		elif btn.disabled:
+		if btn.disabled:
 			btn.modulate = COLOR_LOCKED_DIM
+		elif btn_id == _active and lit:
+			btn.modulate = COLOR_ACCENT
 		else:
 			btn.modulate = Color.WHITE
 

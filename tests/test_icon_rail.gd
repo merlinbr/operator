@@ -34,6 +34,9 @@ func _run() -> void:
 	check(home_btn.modulate == Color.WHITE, "previous unlocked module unhighlighted")
 	check(crew_btn.modulate == Color(1.0, 1.0, 1.0, 0.4), "locked module stays dimmed")
 
+	rail.set_active(&"crew", true)
+	check(crew_btn.modulate == Color(1.0, 1.0, 1.0, 0.4), "active+lit locked module stays dimmed")
+
 	rail.set_active(&"comms", false)
 	check(comms_btn.modulate == Color.WHITE, "active but unlit module not highlighted")
 
