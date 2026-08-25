@@ -56,6 +56,7 @@ func _add_status_divider(row: HBoxContainer) -> void:
 	margin.add_theme_constant_override("margin_left", STATUS_DIVIDER_MARGIN)
 	margin.add_theme_constant_override("margin_right", STATUS_DIVIDER_MARGIN)
 	var divider := VSeparator.new()
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(divider)
 	row.add_child(margin)
 
