@@ -24,6 +24,8 @@ const RAIL_GAP := 16.0
 const CHIP_TOP := 12.0
 const CHIP_GAP := 14.0
 const TICKER_HEIGHT := 30.0
+const TICKER_TOP_GAP := 4.0
+const TICKER_BOTTOM_GAP := 0.0
 const CONTEXT_GAP := 12.0
 const SIZE_CLASSES := {
 	&"compact": Vector2(0.34, 0.46),
@@ -235,10 +237,10 @@ func _apply_layout() -> void:
 	status_chip.position = Vector2((ws_size.x - chip_min.x) * 0.5, CHIP_TOP)
 	status_chip.size = chip_min
 	var content_top: float = CHIP_TOP + status_chip.size.y + CHIP_GAP
-	var content_bottom: float = ws_size.y - TICKER_HEIGHT - MARGIN
+	var content_bottom: float = ws_size.y - TICKER_HEIGHT - TICKER_BOTTOM_GAP - TICKER_TOP_GAP
 	icon_rail.position = Vector2(MARGIN, content_top)
 	icon_rail.size = Vector2(RAIL_WIDTH, content_bottom - content_top)
-	ticker.position = Vector2(0.0, ws_size.y - TICKER_HEIGHT)
+	ticker.position = Vector2(0.0, ws_size.y - TICKER_HEIGHT - TICKER_BOTTOM_GAP)
 	ticker.size = Vector2(ws_size.x, TICKER_HEIGHT)
 
 	var r_left: float = MARGIN + RAIL_WIDTH + RAIL_GAP + PANEL_INSET

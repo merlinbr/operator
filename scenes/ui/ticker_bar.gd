@@ -4,6 +4,7 @@ extends PanelContainer
 const COLOR_ACCENT := Color(0.22353, 0.81569, 1.0)
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392)
 const ROTATE_SECONDS := 6.0
+const TICKER_CONTENT_MARGIN := 4.0
 
 var _messages: Array[Dictionary] = [] # {text: String, highlight: bool}
 var _index := 0
@@ -24,6 +25,13 @@ func _build_children() -> void:
 	_built = true
 	_label = Label.new()
 	_label.text = ""
+	_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var panel_style := get_theme_stylebox("panel", "PanelContainer")
+	if panel_style != null:
+		panel_style = panel_style.duplicate()
+		panel_style.content_margin_top = TICKER_CONTENT_MARGIN
+		panel_style.content_margin_bottom = TICKER_CONTENT_MARGIN
+		add_theme_stylebox_override("panel", panel_style)
 	add_child(_label)
 	_timer = Timer.new()
 	_timer.wait_time = ROTATE_SECONDS

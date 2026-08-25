@@ -8,6 +8,7 @@ func _run() -> void:
 	ticker._build_children() # headless harness never fires _ready(); build now
 
 	var label: Label = ticker.find_children("*", "Label", true, false)[0]
+	check(label.vertical_alignment == VERTICAL_ALIGNMENT_CENTER, "ticker text is vertically centered")
 	check(label.text == "", "empty on start")
 
 	ticker.push_message("first")
