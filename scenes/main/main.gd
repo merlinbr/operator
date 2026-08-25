@@ -242,9 +242,6 @@ func _size_class(id: StringName) -> Vector2:
 
 func _apply_layout() -> void:
 	var ws_size: Vector2 = workspace.size if workspace.size.x > 0.0 else Vector2(1920, 1080)
-	if workspace.size.x <= 0.0:
-		workspace.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		workspace.size = ws_size
 	var chip_min: Vector2 = status_chip.get_combined_minimum_size()
 	status_chip.position = Vector2((ws_size.x - chip_min.x) * 0.5, CHIP_TOP)
 	status_chip.size = chip_min

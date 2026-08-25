@@ -45,7 +45,7 @@ func _run() -> void:
 	main.open_context(load("res://scenes/modules/contracts/contract_detail.tscn").instantiate())
 	check(context.visible and context.get_child_count() == 1, "context opens with content")
 	check(absf(primary.size.x - primary_w) < 1.0, "primary keeps class width when context opens")
-	check(primary.position.x + primary.size.x + context.size.x < workspace.size.x,
+	check(primary.position.x + primary.size.x + main.CONTEXT_GAP + context.size.x < ws.x,
 		"environment remains visible to the right of panels")
 
 	# Esc closes context first
