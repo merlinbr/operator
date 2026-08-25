@@ -42,4 +42,21 @@ func _run() -> void:
 	check(GameStateScript.format_credits(999) == "999", "format_credits below 1000")
 	check(GameStateScript.format_credits(0) == "0", "format_credits zero")
 
+	var active_seen := [&""]
+	gs.active_module_changed.connect(func(id: StringName) -> void: active_seen[0] = id)
+	gs.set_active_module(&"comms")
+	check(gs.active_module == &"comms", "set_active_module sets active")
+	check(active_seen[0] == &"comms", "active_module_changed emitted")
+	gs.set_active_module(&"comms")
+	check(active_seen[0] == &"comms", "no duplicate emit for same active module")
+
+	var open_seen := [false]
+	gs.module_open_changed.connect(func(o: bool) -> void: open_seen[0] = o)
+	gs.set_module_open(true)
+	check(gs.module_open and open_seen[0], "set_module_open(true) emits")
+	gs.set_module_open(true)
+	check(open_seen[0], "no duplicate emit for same open state")
+	gs.set_module_open(false)
+	check(gs.module_open == false and open_seen[0] == false, "set_module_open(false) closes")
+
 	gs.free()

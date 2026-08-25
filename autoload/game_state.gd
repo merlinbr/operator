@@ -9,6 +9,8 @@ signal district_changed(new_district: String)
 signal heat_changed(new_heat: int)
 signal alerts_changed(new_alerts: int)
 signal workspace_collapsed_changed(collapsed: bool)
+signal active_module_changed(id: StringName)
+signal module_open_changed(open: bool)
 signal ticker_message(text: String, highlight: bool)
 
 const START_CREDITS := 12480
@@ -35,6 +37,8 @@ var alerts: int = 2:
 		alerts = value
 		alerts_changed.emit(alerts)
 var workspace_collapsed := false
+var active_module: StringName = &""
+var module_open := false
 
 func add_credits(delta_credits: int) -> void:
 	credits += delta_credits
@@ -51,6 +55,18 @@ func set_workspace_collapsed(collapsed: bool) -> void:
 		return
 	workspace_collapsed = collapsed
 	workspace_collapsed_changed.emit(collapsed)
+
+func set_active_module(id: StringName) -> void:
+	if active_module == id:
+		return
+	active_module = id
+	active_module_changed.emit(id)
+
+func set_module_open(open: bool) -> void:
+	if module_open == open:
+		return
+	module_open = open
+	module_open_changed.emit(open)
 
 func toggle_workspace() -> void:
 	set_workspace_collapsed(not workspace_collapsed)
