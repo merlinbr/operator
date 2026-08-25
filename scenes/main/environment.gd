@@ -5,7 +5,6 @@ extends Control
 
 const PARALLAX_STRENGTH := 8.0
 const NEON_CYAN := Color(0.22353, 0.81569, 1.0)
-const NEON_PINK := Color(1.0, 0.35294, 0.47059)
 
 var _skyline_far: Polygon2D
 var _skyline_near: Polygon2D
@@ -72,7 +71,6 @@ func _rebuild_skyline(poly: Polygon2D) -> void:
 func _build_neon() -> void:
 	var specs := [
 		[NEON_CYAN, Vector2(0.18, 0.62), Vector2(120, 12)],
-		[NEON_PINK, Vector2(0.68, 0.48), Vector2(80, 10)],
 	]
 	for spec: Array in specs:
 		var rect := ColorRect.new()
