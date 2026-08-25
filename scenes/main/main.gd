@@ -80,6 +80,8 @@ func _build_shell() -> void:
 	_build_ticker()
 
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
+	gs.active_module_changed.connect(func(_id: StringName) -> void: _apply_visibility())
+	gs.module_open_changed.connect(func(_open: bool) -> void: _apply_visibility())
 	gs.ticker_message.connect(func(text: String, highlight: bool) -> void: ticker.push_message(text, highlight))
 	icon_rail.module_selected.connect(select_module)
 	collapse_button.pressed.connect(func() -> void: gs.toggle_workspace())
@@ -109,7 +111,7 @@ func _build_status_chip() -> void:
 func _build_collapse_button() -> void:
 	collapse_button = Button.new()
 	collapse_button.name = "CollapseToggle"
-	collapse_button.text = "⧉"
+	collapse_button.text = "Collapse Workspace"
 	collapse_button.tooltip_text = "Collapse workspace"
 	collapse_button.focus_mode = Control.FOCUS_NONE
 	collapse_button.custom_minimum_size = Vector2(32, 32)
@@ -144,9 +146,20 @@ func _build_ticker() -> void:
 
 func select_module(id: StringName) -> void:
 	if not MODULE_SCENES.has(id):
-		return
-	if gs.workspace_collapsed:
+		return # scene-less module (e.g. alerts): no-op
+	var was_collapsed: bool = gs.workspace_collapsed
+	if was_collapsed:
 		gs.set_workspace_collapsed(false)
+	if not was_collapsed and gs.active_module == id and gs.module_open:
+		gs.set_module_open(false) # toggle closed - active_module stays set
+		close_context()
+		return
+	gs.set_active_module(id)
+	gs.set_module_open(true)
+	_build_primary_module(id)
+
+func _build_primary_module(id: StringName) -> void:
+	close_context()
 	for child in primary_host.get_children():
 		primary_host.remove_child(child)
 		child.queue_free()
@@ -157,24 +170,34 @@ func select_module(id: StringName) -> void:
 		panel.setup(gs, PlaceholderContracts.all())
 	else:
 		panel.setup(gs, PlaceholderMessages.all() if id == &"comms" else null)
-	if icon_rail.has_method("set_active"):
-		icon_rail.set_active(id)
-	_apply_layout()
+	_apply_visibility()
+
+func close_topmost() -> void:
+	if gs.workspace_collapsed:
+		return # nothing visible to close
+	if context_host.visible and context_host.get_child_count() > 0:
+		close_context()
+	elif gs.module_open:
+		gs.set_module_open(false)
+		_apply_visibility()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		close_topmost()
+		get_viewport().set_input_as_handled()
 
 func open_context(content: Control) -> void:
 	for child in context_host.get_children():
 		context_host.remove_child(child)
 		child.queue_free()
 	context_host.add_child(content)
-	context_host.visible = true
-	_apply_layout()
+	_apply_visibility()
 
 func close_context() -> void:
 	for child in context_host.get_children():
 		context_host.remove_child(child)
 		child.queue_free()
-	context_host.visible = false
-	_apply_layout()
+	_apply_visibility()
 
 func set_collapsed(collapsed: bool) -> void:
 	gs.set_workspace_collapsed(collapsed)
@@ -185,8 +208,7 @@ func _on_contract_selected(contract: Dictionary) -> void:
 	detail.setup(gs, contract)
 
 func _on_collapsed_changed(collapsed: bool) -> void:
-	_apply_workspace_visibility(collapsed)
-	_apply_layout()
+	_apply_visibility()
 	if collapsed:
 		return
 	if not is_inside_tree():
@@ -195,10 +217,15 @@ func _on_collapsed_changed(collapsed: bool) -> void:
 	primary_host.modulate.a = 0.0
 	tween.tween_property(primary_host, "modulate:a", 1.0, 0.15)
 
-func _apply_workspace_visibility(collapsed: bool) -> void:
-	primary_host.visible = not collapsed
-	context_host.visible = not collapsed and context_host.get_child_count() > 0
+func _apply_visibility() -> void:
+	var collapsed: bool = gs.workspace_collapsed
+	primary_host.visible = not collapsed and gs.module_open
+	context_host.visible = not collapsed and gs.module_open and context_host.get_child_count() > 0
+	collapse_button.text = "Expand Workspace" if collapsed else "Collapse Workspace"
 	collapse_button.tooltip_text = "Expand workspace" if collapsed else "Collapse workspace"
+	if icon_rail.has_method("set_active"):
+		icon_rail.set_active(gs.active_module, gs.module_open and not collapsed)
+	_apply_layout()
 
 func _apply_layout() -> void:
 	var ws_size: Vector2 = workspace.size if workspace.size.x > 0.0 else Vector2(1920, 1080)
