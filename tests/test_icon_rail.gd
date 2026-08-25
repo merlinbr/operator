@@ -28,10 +28,13 @@ func _run() -> void:
 	home_btn.pressed.emit()
 	check(seen[0] == &"home", "pressing home emits module_selected(home)")
 
-	rail.set_active(&"comms")
+	rail.set_active(&"comms", true)
 	var comms_btn: Button = rail.get_button(&"comms")
-	check(comms_btn.modulate == Color(0.22353, 0.81569, 1.0), "active module highlighted cyan")
+	check(comms_btn.modulate == Color(0.22353, 0.81569, 1.0), "active+lit module highlighted cyan")
 	check(home_btn.modulate == Color.WHITE, "previous unlocked module unhighlighted")
 	check(crew_btn.modulate == Color(1.0, 1.0, 1.0, 0.4), "locked module stays dimmed")
+
+	rail.set_active(&"comms", false)
+	check(comms_btn.modulate == Color.WHITE, "active but unlit module not highlighted")
 
 	rail.queue_free()

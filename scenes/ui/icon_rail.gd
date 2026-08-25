@@ -24,11 +24,11 @@ func setup(registry: ModuleRegistry) -> void:
 func get_button(id: StringName) -> Button:
 	return _buttons.get(id)
 
-func set_active(id: StringName) -> void:
+func set_active(id: StringName, lit: bool = true) -> void:
 	_active = id
 	for btn_id: StringName in _buttons:
 		var btn: Button = _buttons[btn_id]
-		if btn_id == _active:
+		if btn_id == _active and lit:
 			btn.modulate = COLOR_ACCENT
 		elif btn.disabled:
 			btn.modulate = COLOR_LOCKED_DIM
