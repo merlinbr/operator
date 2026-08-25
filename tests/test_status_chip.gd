@@ -36,6 +36,35 @@ func _run() -> void:
 	check(action != null, "integrated workspace action exists")
 	check(action.text == "COLLAPSE ▲", "expanded action label")
 	check(action.tooltip_text == "Collapse workspace", "expanded action tooltip")
+	var row: HBoxContainer = null
+	var rows := chip.find_children("*", "HBoxContainer", true, false)
+	if not rows.is_empty():
+		row = rows[0] as HBoxContainer
+	check(row != null, "status fields share one horizontal row")
+	var row_children: Array = row.get_children() if row != null else []
+	check(row_children.size() == 10, "status row keeps three padded dividers and action divider")
+
+	var separators := chip.find_children("*", "VSeparator", true, false)
+	check(separators.size() == 4, "chip has three status dividers plus the action divider")
+
+	for child_index in [1, 3, 5]:
+		var padded_divider: MarginContainer = null
+		if row_children.size() > child_index:
+			padded_divider = row_children[child_index] as MarginContainer
+		check(padded_divider != null, "status divider %d uses a MarginContainer" % child_index)
+		if padded_divider == null:
+			continue
+		check(padded_divider.get_child_count() == 1 and padded_divider.get_child(0) is VSeparator,
+			"status divider %d contains one VSeparator" % child_index)
+		check(padded_divider.get_theme_constant("margin_left") == 16,
+			"status divider %d has 16 px left padding" % child_index)
+		check(padded_divider.get_theme_constant("margin_right") == 16,
+			"status divider %d has 16 px right padding" % child_index)
+
+	check(row_children.size() > 8 and row_children[8] is VSeparator,
+		"existing divider remains before the workspace action")
+	check(row_children.size() > 9 and row_children[9] == action,
+		"workspace action remains the final row child")
 	var requested := [false]
 	chip.collapse_requested.connect(func() -> void: requested[0] = true)
 	action.pressed.emit()
