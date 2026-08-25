@@ -38,13 +38,13 @@ func _build_children() -> void:
 	_time_label.custom_minimum_size.x = COMPACT_FIELD_WIDTH
 	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	row.add_child(_credits_label)
-	_add_status_divider(row)
+	_add_divider(row)
 	row.add_child(_district_label)
-	_add_status_divider(row)
+	_add_divider(row)
 	row.add_child(_day_label)
-	_add_status_divider(row)
+	_add_divider(row)
 	row.add_child(_time_label)
-	row.add_child(VSeparator.new())
+	_add_divider(row, 0)
 	_collapse_button = Button.new()
 	_collapse_button.name = "WorkspaceAction"
 	_collapse_button.flat = true
@@ -52,11 +52,11 @@ func _build_children() -> void:
 	_collapse_button.pressed.connect(_on_workspace_action_pressed)
 	row.add_child(_collapse_button)
 
-func _add_status_divider(row: HBoxContainer) -> void:
+func _add_divider(row: HBoxContainer, margin_right: int = STATUS_DIVIDER_MARGIN) -> void:
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_theme_constant_override("margin_left", STATUS_DIVIDER_MARGIN)
-	margin.add_theme_constant_override("margin_right", STATUS_DIVIDER_MARGIN)
+	margin.add_theme_constant_override("margin_right", margin_right)
 	var divider := VSeparator.new()
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(divider)

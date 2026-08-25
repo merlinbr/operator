@@ -71,8 +71,17 @@ func _run() -> void:
 		check(padded_divider.get_theme_constant("margin_right") == 16,
 			"status divider %d has 16 px right padding" % child_index)
 
-	check(row_children.size() > 7 and row_children[7] is VSeparator,
-		"existing divider remains immediately after the time field")
+	var action_divider: MarginContainer = null
+	if row_children.size() > 7:
+		action_divider = row_children[7] as MarginContainer
+	check(action_divider != null, "action divider has matching time-field padding")
+	if action_divider != null:
+		check(action_divider.get_child_count() == 1 and action_divider.get_child(0) is VSeparator,
+			"action divider contains one VSeparator")
+		check(action_divider.get_theme_constant("margin_left") == 16,
+			"action divider has 16 px left padding")
+		check(action_divider.get_theme_constant("margin_right") == 0,
+			"action divider has no trailing padding")
 	check(row_children.size() > 8 and row_children[8] == action,
 		"workspace action remains the final row child")
 	var requested := [false]
