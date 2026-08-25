@@ -37,7 +37,6 @@ const PANEL_INSET := 18.0
 var gs: Node
 var workspace: Control
 var status_chip: Control
-var collapse_button: Button
 var icon_rail: Control
 var primary_host: Control
 var context_host: Control
@@ -81,7 +80,6 @@ func _build_shell() -> void:
 	add_child(workspace)
 
 	_build_status_chip()
-	_build_collapse_button()
 	_build_rail()
 	_build_panel_hosts()
 	_build_ticker()
@@ -91,7 +89,7 @@ func _build_shell() -> void:
 	gs.module_open_changed.connect(func(_open: bool) -> void: _apply_visibility())
 	gs.ticker_message.connect(func(text: String, highlight: bool) -> void: ticker.push_message(text, highlight))
 	icon_rail.module_selected.connect(select_module)
-	collapse_button.pressed.connect(func() -> void: gs.toggle_workspace())
+	status_chip.collapse_requested.connect(gs.toggle_workspace)
 
 	select_module(&"home")
 	_apply_layout()
@@ -114,15 +112,6 @@ func _build_status_chip() -> void:
 	status_chip.name = "StatusChip"
 	workspace.add_child(status_chip)
 	status_chip.setup(gs)
-
-func _build_collapse_button() -> void:
-	collapse_button = Button.new()
-	collapse_button.name = "CollapseToggle"
-	collapse_button.text = "Collapse Workspace"
-	collapse_button.tooltip_text = "Collapse workspace"
-	collapse_button.focus_mode = Control.FOCUS_NONE
-	collapse_button.custom_minimum_size = Vector2(32, 32)
-	workspace.add_child(collapse_button)
 
 func _build_rail() -> void:
 	icon_rail = IconRailScene.instantiate()
@@ -228,8 +217,6 @@ func _apply_visibility() -> void:
 	var collapsed: bool = gs.workspace_collapsed
 	primary_host.visible = not collapsed and gs.module_open
 	context_host.visible = not collapsed and gs.module_open and context_host.get_child_count() > 0
-	collapse_button.text = "Expand Workspace" if collapsed else "Collapse Workspace"
-	collapse_button.tooltip_text = "Expand workspace" if collapsed else "Collapse workspace"
 	if icon_rail.has_method("set_active"):
 		icon_rail.set_active(gs.active_module, gs.module_open and not collapsed)
 	_apply_layout()
@@ -243,11 +230,10 @@ func _size_class(id: StringName) -> Vector2:
 func _apply_layout() -> void:
 	var ws_size: Vector2 = workspace.size if workspace.size.x > 0.0 else Vector2(1920, 1080)
 	var chip_min: Vector2 = status_chip.get_combined_minimum_size()
+	if chip_min.x <= 0.0 or chip_min.y <= 0.0:
+		chip_min = status_chip.get_minimum_size()
 	status_chip.position = Vector2((ws_size.x - chip_min.x) * 0.5, CHIP_TOP)
 	status_chip.size = chip_min
-	var collapse_min: Vector2 = collapse_button.get_combined_minimum_size()
-	collapse_button.position = Vector2(ws_size.x - MARGIN - collapse_min.x, CHIP_TOP)
-	collapse_button.size = collapse_min
 	var content_top: float = CHIP_TOP + status_chip.size.y + CHIP_GAP
 	var content_bottom: float = ws_size.y - TICKER_HEIGHT - MARGIN
 	icon_rail.position = Vector2(MARGIN, content_top)

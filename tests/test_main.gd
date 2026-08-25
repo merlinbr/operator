@@ -79,10 +79,20 @@ func _run() -> void:
 	check(primary.visible and primary.get_child(0).name == "CommsPanel", "comms open after un-collapse")
 	check(gs.module_open, "module open after un-collapse")
 
-	# collapse button is a labeled button
-	var collapse_btn: Button = workspace.get_node("CollapseToggle")
-	check(collapse_btn.text == "Collapse Workspace", "collapse button labeled")
-	check(collapse_btn.size.x > 0.0 and collapse_btn.size.y > 0.0, "collapse button has clickable size")
+	var status_chip: Control = workspace.get_node("StatusChip")
+	var action: Button = status_chip.find_child("WorkspaceAction", true, false) as Button
+	check(action != null, "integrated workspace action exists")
+	check(workspace.get_node_or_null("CollapseToggle") == null, "legacy collapse toggle removed")
+	check(action.text == "COLLAPSE ▲", "expanded workspace action label")
+	action.pressed.emit()
+	check(gs.workspace_collapsed, "workspace action collapses workspace")
+	check(action.text == "EXPAND ▼", "collapsed workspace action label")
+	action.pressed.emit()
+	check(not gs.workspace_collapsed, "workspace action expands workspace")
+	check(action.text == "COLLAPSE ▲", "expanded workspace action label restored")
+	check(status_chip.size.x > status_chip.size.y, "status HUD is wider than tall")
+	check(absf(status_chip.position.x - (ws.x - status_chip.size.x) * 0.5) <= 1.0,
+		"status HUD is horizontally centered")
 
 	main.queue_free()
 	gs.queue_free()
