@@ -6,4 +6,5 @@ extends Resource
 @export var display_name: String = ""
 @export var glyph: String = "?"
 @export var group: StringName = &"core" # core | operational | utility
+@export var size_class: StringName = &"normal" # compact | narrow | normal | wide | context
 @export var unlocked := false
