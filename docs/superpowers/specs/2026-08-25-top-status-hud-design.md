@@ -27,7 +27,7 @@ Render one horizontal row with these status fields, in order:
 
 `12,480 CR | LOWER VESPER | DAY 14 | 23:41 | COLLAPSE ▲`
 
-Credits, district, day, and time remain individually readable and separated by quiet dividers. The action is right-aligned within the same panel and has its own divider. The action label changes to `EXPAND ▲` while collapsed.
+Build the row as `status fields → flexible spacer → divider → action`. Keep credits, district, day, and time grouped on the left/center portion of the HUD; the action is the right-side control end-cap of the same frame, not another evenly spaced status field.
 
 Keep the HUD centered using the existing `Main._apply_layout()` centering path. Give the control a thin, wide footprint: approximately 36–40 px tall and 620–680 px wide at the reference resolution. Keep the row intact rather than introducing a second responsive layout. Preserve the existing top offset.
 
@@ -39,7 +39,7 @@ Use the approved bracket-frame direction:
 - square or near-square corners, using the existing panel palette;
 - dark, quiet interior rather than a prominent filled toolbar surface;
 - existing monospace theme typography and spacing;
-- muted resting text, with the existing cyan accent reserved for hover/focus and the credits emphasis;
+- muted resting text for normal status information, with the existing warm amber/yellow emphasis preserved for credits;
 - no floating button, icon rail, extra shadow, or decorative toolbar chrome.
 
 The bracket-frame direction means a restrained rectangular status frame, not a separate set of corner widgets or a new visual system.
@@ -48,10 +48,10 @@ The bracket-frame direction means a restrained rectangular status frame, not a s
 
 Only the integrated action button is interactive. Clicking other status fields has no effect. Keyboard activation remains available through the `Button`, with the existing quiet focus styling.
 
-The HUD listens to `workspace_collapsed_changed` and updates the action label and tooltip:
+The HUD listens to `workspace_collapsed_changed` and updates the action label and tooltip. During `StatusChip.setup(gs)`, initialize the action presentation from the current `gs.workspace_collapsed` value so an already-collapsed workspace immediately shows the expanded-state action.
 
 - expanded: `COLLAPSE ▲`, “Collapse workspace”;
-- collapsed: `EXPAND ▲`, “Expand workspace”.
+- collapsed: `EXPAND ▼`, “Expand workspace”.
 
 Collapse semantics do not change: primary and context panels hide, while the status HUD, icon rail, and ticker remain visible. Expanding does not reopen a module that was already closed. Existing module selection, Esc handling, and ticker behavior remain unchanged.
 
@@ -64,7 +64,7 @@ Collapse semantics do not change: primary and context panels hide, while the sta
 - `tests/test_status_chip.gd` — verify four status fields, updates, action signal, and collapsed/expanded label presentation.
 - `tests/test_main.gd` — verify there is no standalone collapse node, the integrated HUD survives collapse, and the action toggles `GameState` state.
 
-Preserve the current idempotent child construction used by headless tests and keep setup dependency injection through `setup(gs)`; do not add autoload lookups or new abstractions.
+Preserve the current idempotent child construction used by headless tests and keep setup dependency injection through `setup(gs)`; do not add autoload lookups or new abstractions. Keep the existing `StatusChip` scene/class naming; do not rename it to `StatusHud` or introduce related refactors.
 
 ## Verification
 
@@ -73,12 +73,13 @@ Run the existing headless test suite. The changed tests must demonstrate:
 1. status content initializes from the default `GameState` values;
 2. credits and clock changes update the correct fields, including day rollover behavior already covered by the state signal;
 3. the integrated action emits intent and updates its label/tooltip when collapse state changes;
-4. `Main` contains one top HUD and no `CollapseToggle` node;
-5. collapse still hides panels while leaving the HUD, rail, and ticker visible;
-6. the HUD is wider than it is tall and remains centered.
+4. an initially collapsed `GameState` makes `StatusChip.setup(gs)` immediately show `EXPAND ▼` and “Expand workspace”;
+5. `Main` contains one top HUD and no `CollapseToggle` node;
+6. collapse still hides panels while leaving the HUD, rail, and ticker visible;
+7. the HUD is wider than it is tall and remains centered.
 
 Launch the Godot project for a visual smoke check at the reference viewport: confirm the thin bracket frame, centered placement, readable dividers, quiet integrated action, and expanded/collapsed label transition.
 
 ## Scope Exclusions
 
-Do not change workspace collapse semantics, module layout sizing, icon rail behavior, ticker behavior, game-state fields, or unrelated theme surfaces. Do not add responsive breakpoints, animation systems, tooltips beyond the existing action tooltip, or a new HUD abstraction.
+Do not change workspace collapse semantics, module layout sizing, icon rail behavior, ticker behavior, game-state fields, or unrelated theme surfaces. Do not add responsive breakpoints, animation systems, tooltips beyond the existing action tooltip, a new HUD abstraction, or a `StatusHud` rename. Do not address workspace/side-rail alignment; keep that as a separate follow-up.
