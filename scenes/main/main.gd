@@ -24,8 +24,15 @@ const RAIL_GAP := 16.0
 const CHIP_TOP := 12.0
 const CHIP_GAP := 14.0
 const TICKER_HEIGHT := 30.0
-const CONTEXT_SPLIT := 0.62
 const CONTEXT_GAP := 12.0
+const SIZE_CLASSES := {
+	&"compact": Vector2(0.34, 0.46),
+	&"narrow": Vector2(0.44, 0.68),
+	&"normal": Vector2(0.60, 0.72),
+	&"wide": Vector2(0.78, 0.82),
+	&"context": Vector2(0.31, 0.0), # height mirrors the primary
+}
+const PANEL_INSET := 18.0
 
 var gs: Node
 var workspace: Control
@@ -227,8 +234,17 @@ func _apply_visibility() -> void:
 		icon_rail.set_active(gs.active_module, gs.module_open and not collapsed)
 	_apply_layout()
 
+func _size_class(id: StringName) -> Vector2:
+	var reg := load("res://resources/module_registry.tres") as ModuleRegistry
+	var def := reg.get_module(id) if reg != null else null
+	var cls: StringName = def.size_class if def != null else &"normal"
+	return SIZE_CLASSES.get(cls, SIZE_CLASSES[&"normal"])
+
 func _apply_layout() -> void:
 	var ws_size: Vector2 = workspace.size if workspace.size.x > 0.0 else Vector2(1920, 1080)
+	if workspace.size.x <= 0.0:
+		workspace.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		workspace.size = ws_size
 	var chip_min: Vector2 = status_chip.get_combined_minimum_size()
 	status_chip.position = Vector2((ws_size.x - chip_min.x) * 0.5, CHIP_TOP)
 	status_chip.size = chip_min
@@ -239,17 +255,26 @@ func _apply_layout() -> void:
 	icon_rail.size = Vector2(RAIL_WIDTH, content_bottom - content_top)
 	ticker.position = Vector2(0.0, ws_size.y - TICKER_HEIGHT)
 	ticker.size = Vector2(ws_size.x, TICKER_HEIGHT)
-	var panel_left: float = MARGIN + RAIL_WIDTH + RAIL_GAP
-	var available_right: float = ws_size.x - MARGIN
-	var context_open: bool = context_host.visible
-	var primary_right: float = available_right
-	if context_open:
-		primary_right = panel_left + (available_right - panel_left) * CONTEXT_SPLIT - CONTEXT_GAP * 0.5
-	primary_host.position = Vector2(panel_left, content_top)
-	primary_host.size = Vector2(primary_right - panel_left, content_bottom - content_top)
-	if context_open:
-		context_host.position = Vector2(primary_right + CONTEXT_GAP, content_top)
-		context_host.size = Vector2(available_right - primary_right - CONTEXT_GAP, content_bottom - content_top)
+
+	var r_left: float = MARGIN + RAIL_WIDTH + RAIL_GAP + PANEL_INSET
+	var r_top: float = content_top + PANEL_INSET
+	var r_right: float = ws_size.x - MARGIN - PANEL_INSET
+	var r_bottom: float = content_bottom - PANEL_INSET
+	var r_w: float = r_right - r_left
+	var r_h: float = r_bottom - r_top
+
+	var p_class: Vector2 = _size_class(gs.active_module)
+	var p_w: float = r_w * p_class.x
+	var p_h: float = r_h * p_class.y
+	primary_host.position = Vector2(r_left, r_top)
+	primary_host.size = Vector2(maxf(p_w, 0.0), maxf(p_h, 0.0))
+
+	var ctx_open: bool = context_host.visible and context_host.get_child_count() > 0
+	if ctx_open:
+		var c_class: Vector2 = SIZE_CLASSES[&"context"]
+		var c_w: float = r_w * c_class.x
+		context_host.position = Vector2(r_left + primary_host.size.x + CONTEXT_GAP, r_top)
+		context_host.size = Vector2(c_w, primary_host.size.y) # height mirrors primary
 	for panel in primary_host.get_children():
 		panel.size = primary_host.size
 	for panel in context_host.get_children():

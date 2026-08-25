@@ -20,6 +20,9 @@ func _run() -> void:
 	check(primary.visible, "home panel visible on start")
 	check(gs.active_module == &"home", "active module is home")
 	check(gs.module_open, "module starts open")
+	var ws: Vector2 = workspace.size if workspace.size.x > 0 else Vector2(1920, 1080)
+	check(primary.size.x < ws.x * 0.5, "home width is compact")
+	check(primary.size.y < ws.y * 0.6, "home height is compact")
 
 	# active icon toggles its module closed
 	main.select_module(&"home")
@@ -37,9 +40,13 @@ func _run() -> void:
 	check(primary.get_child(0).name == "ContractsPanel", "module switching swaps panel")
 	check(gs.active_module == &"contracts", "active module is contracts")
 
-	# context opens alongside primary
+	# context opens alongside primary (primary keeps its class width)
+	var primary_w: float = primary.size.x
 	main.open_context(load("res://scenes/modules/contracts/contract_detail.tscn").instantiate())
 	check(context.visible and context.get_child_count() == 1, "context opens with content")
+	check(absf(primary.size.x - primary_w) < 1.0, "primary keeps class width when context opens")
+	check(primary.position.x + primary.size.x + context.size.x < workspace.size.x,
+		"environment remains visible to the right of panels")
 
 	# Esc closes context first
 	main.close_topmost()
