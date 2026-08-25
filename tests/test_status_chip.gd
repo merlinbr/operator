@@ -20,6 +20,16 @@ func _run() -> void:
 	check(labels[1].text == "LOWER VESPER", "district label — got '%s'" % labels[1].text)
 	check(labels[2].text == "DAY 14", "day label — got '%s'" % labels[2].text)
 	check(labels[3].text == "23:41", "time label — got '%s'" % labels[3].text)
+	check(labels[2].custom_minimum_size.x == 80.0, "day field uses 80 px minimum width")
+	check(labels[3].custom_minimum_size.x == 80.0, "time field uses 80 px minimum width")
+	check(labels[2].horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER,
+		"day value is centered")
+	check(labels[3].horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER,
+		"time value is centered")
+	check(labels[1].custom_minimum_size.x == 0.0,
+		"location field remains content-sized")
+	check(chip.custom_minimum_size == Vector2(0.0, 38.0),
+		"HUD removes fixed width while retaining 38 px height")
 
 	gs.add_credits(520)
 	check(labels[0].text == "13,000 CR", "credits label updates on signal")
@@ -42,7 +52,7 @@ func _run() -> void:
 		row = rows[0] as HBoxContainer
 	check(row != null, "status fields share one horizontal row")
 	var row_children: Array = row.get_children() if row != null else []
-	check(row_children.size() == 10, "status row keeps three padded dividers and action divider")
+	check(row_children.size() == 9, "status row removes the flexible spacer")
 
 	var separators := chip.find_children("*", "VSeparator", true, false)
 	check(separators.size() == 4, "chip has three status dividers plus the action divider")
@@ -61,9 +71,9 @@ func _run() -> void:
 		check(padded_divider.get_theme_constant("margin_right") == 16,
 			"status divider %d has 16 px right padding" % child_index)
 
-	check(row_children.size() > 8 and row_children[8] is VSeparator,
-		"existing divider remains before the workspace action")
-	check(row_children.size() > 9 and row_children[9] == action,
+	check(row_children.size() > 7 and row_children[7] is VSeparator,
+		"existing divider remains immediately after the time field")
+	check(row_children.size() > 8 and row_children[8] == action,
 		"workspace action remains the final row child")
 	var requested := [false]
 	chip.collapse_requested.connect(func() -> void: requested[0] = true)
