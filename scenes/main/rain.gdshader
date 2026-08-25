@@ -27,8 +27,8 @@ float rain_layer(vec2 uv, float density, float slant, float speed_base,
 void fragment() {
 	vec2 uv = UV;
 	float a = 0.0;
-	a += rain_layer(uv, 140.0, 0.05, 2.2, 0.8, 0.08, 0.04, 0.15, 0.10, 1.0);  // near
-	a += rain_layer(uv, 220.0, 0.045, 1.4, 0.8, 0.055, 0.03, 0.10, 0.06, 7.0); // mid
-	a += rain_layer(uv, 320.0, 0.04, 0.8, 0.8, 0.035, 0.02, 0.06, 0.035, 13.0); // far
+	a += rain_layer(uv, 140.0, 0.05, 1.65, 0.6, 0.08, 0.04, 0.15, 0.10, 1.0);  // near
+	a += rain_layer(uv, 220.0, 0.045, 1.05, 0.6, 0.055, 0.03, 0.10, 0.06, 7.0); // mid
+	a += rain_layer(uv, 320.0, 0.04, 0.6, 0.6, 0.035, 0.02, 0.06, 0.035, 13.0); // far
 	COLOR = vec4(0.706, 0.863, 1.0, a * intensity);
 }
