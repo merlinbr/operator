@@ -6,10 +6,10 @@ const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 
 var _background: TextureRect
 
-func _init() -> void:
-	_build_background()
+func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-func _build_background() -> void:
 	_background = TextureRect.new()
 	_background.name = "ApartmentBackground"
 	_background.texture = ApartmentTexture
@@ -18,12 +18,7 @@ func _build_background() -> void:
 	_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_background)
 
-func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	set_anchors_preset(Control.PRESET_FULL_RECT)
 	resized.connect(apply_environment_layout)
-
-
 	# First layout: _ready may run before the parent assigns our final size.
 	await get_tree().process_frame
 	apply_environment_layout()

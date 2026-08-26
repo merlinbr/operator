@@ -31,3 +31,36 @@ The focused test covers 16:9 artwork coverage, square-viewport horizontal crop, 
 ## Status
 
 Task 1 implementation is complete and ready for commit as `feat: add tier 1 apartment background`.
+
+## Review Fix Round 1
+
+- Moved apartment background construction into `EnvironmentLayer._ready()` and retained the deferred first layout.
+- Updated the focused test to defer its run until the SceneTree is ready, then verify deferred layout, resize-signal layout, and exact applied background geometry.
+- Added exact square cover-crop and mapped window-rectangle assertions, including zero and negative dimensions.
+- Added texture identity/path and root input-isolation checks, plus zero-size layout safety coverage.
+
+Focused command:
+
+```powershell
+rtk powershell -NoProfile -ExecutionPolicy Bypass -File ./tests/run_test.ps1 test_environment
+```
+
+Focused output:
+
+```text
+PASS: environment root ignores pointer input
+PASS: 16:9 art occupies the viewport
+PASS: background follows the fitted artwork rectangle
+PASS: Tier 1 apartment texture is assigned from the required path
+PASS: background uses aspect-preserving cover crop
+PASS: background ignores pointer input
+PASS: square viewport uses exact horizontal cover crop
+PASS: window rectangle maps through cropped artwork geometry
+PASS: window rectangle is empty for zero or negative dimensions
+PASS: resize signal reapplies cropped background layout
+PASS: zero-size layout does not create invalid background geometry
+PASS: art rectangle is empty for zero or negative dimensions
+RESULT: ALL PASSED
+```
+
+The run still emits only Godot anchor-size warnings caused by assigning sizes to full-rect anchored controls in the prescribed lifecycle test; no script errors or assertion failures occurred.
