@@ -39,6 +39,20 @@ func _run() -> void:
 	check(background.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"background ignores pointer input")
 
+	var window_rain: Control = environment.get_node("WindowRain")
+	var expected_window_16x9: Rect2 = environment.window_rect_for(environment.size)
+	check(window_rain is ColorRect, "window rain is a ColorRect")
+	check(window_rain.position.is_equal_approx(expected_window_16x9.position)
+		and window_rain.size.is_equal_approx(expected_window_16x9.size),
+		"window rain follows the mapped window rectangle")
+	check(window_rain.material is ShaderMaterial,
+		"window rain uses a ShaderMaterial")
+	check(window_rain.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"window rain ignores pointer input")
+	check(window_rain.size.x < environment.size.x
+		and window_rain.size.y < environment.size.y,
+		"window rain is smaller than the environment viewport")
+
 	var square_size := Vector2(1000.0, 1000.0)
 	var square_scale := maxf(square_size.x / ART_SIZE.x, square_size.y / ART_SIZE.y)
 	var square_art_size := ART_SIZE * square_scale
@@ -64,6 +78,11 @@ func _run() -> void:
 	check(background.position.is_equal_approx(expected_square.position)
 		and background.size.is_equal_approx(expected_square.size),
 		"resize signal reapplies cropped background layout")
+
+	environment.apply_environment_layout()
+	check(window_rain.position.is_equal_approx(expected_window.position)
+		and window_rain.size.is_equal_approx(expected_window.size),
+		"window rain follows mapped window after non-16:9 resize")
 
 	environment.size = Vector2.ZERO
 	environment.apply_environment_layout()

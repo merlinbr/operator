@@ -5,6 +5,9 @@ const WINDOW_UV_RECT := Rect2(0.555, 0.136, 0.219, 0.435)
 const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 
 var _background: TextureRect
+var _window_rain: ColorRect
+
+const RainShader := preload("res://scenes/main/rain.gdshader")
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -17,6 +20,15 @@ func _ready() -> void:
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(_background)
+
+	_window_rain = ColorRect.new()
+	_window_rain.name = "WindowRain"
+	_window_rain.color = Color.WHITE
+	_window_rain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rain_material := ShaderMaterial.new()
+	rain_material.shader = RainShader
+	_window_rain.material = rain_material
+	add_child(_window_rain)
 
 	resized.connect(apply_environment_layout)
 	# First layout: _ready may run before the parent assigns our final size.
@@ -47,3 +59,6 @@ func apply_environment_layout() -> void:
 	var art_rect := art_rect_for(size)
 	_background.position = art_rect.position
 	_background.size = art_rect.size
+	var window_rect := window_rect_for(size)
+	_window_rain.position = window_rect.position
+	_window_rain.size = window_rect.size
