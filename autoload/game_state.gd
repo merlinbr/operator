@@ -15,9 +15,16 @@ signal ticker_message(text: String, highlight: bool)
 const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
 
 signal contracts_changed
+signal messages_changed
 
 var contracts: Array[Dictionary] = ContractCatalog.all()
 var active_contract_id: StringName = &""
+var mara_favor_owed := false
+var messages: Array[Dictionary] = [
+	{"id": &"msg_mara_crate", "sender": "MARA", "preview": "Vesper has a cold-chain run. Start there.", "unread": true},
+	{"id": &"msg_system_sweep", "sender": "SYSTEM", "preview": "corp sweep expected in Sector 9 tonight", "unread": true},
+	{"id": &"msg_vasquez_docks", "sender": "VASQUEZ", "preview": "docks shift change is at 04:00, not 03:00", "unread": false},
+]
 
 const START_CREDITS := 12480
 const START_DISTRICT := "LOWER VESPER"
@@ -48,6 +55,15 @@ var module_open := false
 
 func add_credits(delta_credits: int) -> void:
 	credits += delta_credits
+func add_message(sender: String, preview: String) -> void:
+	messages.append({
+		"id": StringName("msg_%s_%d" % [sender.to_lower(), messages.size()]),
+		"sender": sender,
+		"preview": preview,
+		"unread": true,
+	})
+	messages_changed.emit()
+	push_ticker("NEW MESSAGE // " + sender, true)
 
 func advance_minutes(minutes: int) -> void:
 	minute_of_day += minutes
@@ -78,6 +94,7 @@ func accept_contract(id: StringName) -> bool:
 	active_contract_id = id
 	contracts_changed.emit()
 	push_ticker("CONTRACT ACCEPTED // " + contract.code, true)
+	add_message("MARA", "Keep it cold. Keep it boring.")
 	return true
 
 func proceed_contract(id: StringName) -> bool:
@@ -91,7 +108,53 @@ func proceed_contract(id: StringName) -> bool:
 	contract.phase = &"customs_hold"
 	contracts_changed.emit()
 	push_ticker("CUSTOMS HOLD // " + contract.destination, true)
+	add_message("MARA", "Customs is fishing for an excuse.")
 	return true
+ 
+func _choice(contract: Dictionary, choice_id: StringName) -> Dictionary:
+	for choice: Dictionary in contract.complication.choices:
+		if choice.id == choice_id:
+			return choice
+	return {}
+
+func resolve_contract(id: StringName, choice_id: StringName) -> bool:
+	var index := _contract_index(id)
+	if index < 0 or active_contract_id != id:
+		return false
+	var contract: Dictionary = contracts[index]
+	if contract.status != &"active" or contract.phase != &"customs_hold":
+		return false
+	var choice := _choice(contract, choice_id)
+	if choice.is_empty():
+		return false
+	if choice.credit_delta != 0:
+		add_credits(choice.credit_delta)
+	if choice.heat_delta != 0:
+		heat += choice.heat_delta
+	if choice.get("sets_mara_favor_owed", false):
+		mara_favor_owed = true
+	contract.status = choice.terminal_status
+	contract.phase = &"resolved"
+	contract.resolution_id = choice_id
+	active_contract_id = &""
+	contracts_changed.emit()
+	_push_resolution_feedback(choice_id)
+	return true
+
+func _push_resolution_feedback(choice_id: StringName) -> void:
+	match choice_id:
+		&"pay_fee":
+			push_ticker("CONTRACT COMPLETE // +1,150 CR", true)
+			add_message("MARA", "Paperwork cost less than a seizure.")
+		&"call_mara":
+			push_ticker("CONTRACT COMPLETE // +1,400 CR", true)
+			add_message("MARA", "You owe me one.")
+		&"bypass":
+			push_ticker("CONTRACT COMPLETE // +1,400 CR // HEAT +2", true)
+			add_message("MARA", "The crate moved; so did their cameras.")
+		&"abort":
+			push_ticker("CONTRACT FAILED // DELIVERY ABORTED", true)
+			add_message("MARA", "Walking was cheaper than escalation.")
 
 func set_workspace_collapsed(collapsed: bool) -> void:
 	if workspace_collapsed == collapsed:

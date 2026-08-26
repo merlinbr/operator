@@ -1,6 +1,11 @@
 extends "res://tests/test_base.gd"
 
 const GameStateScript := preload("res://autoload/game_state.gd")
+func _at_customs() -> Variant:
+	var gs := GameStateScript.new()
+	check(gs.accept_contract(&"cold_chain_delivery"), "accept setup succeeds")
+	check(gs.proceed_contract(&"cold_chain_delivery"), "proceed setup succeeds")
+	return gs
 
 func _run() -> void:
 	var gs := GameStateScript.new()
@@ -76,5 +81,46 @@ func _run() -> void:
 	check(contract_gs.get_contract(&"cold_chain_delivery").phase == &"customs_hold",
 		"proceed exposes the Customs hold")
 	contract_gs.free()
+	var invalid_gs := GameStateScript.new()
+	check(invalid_gs.accept_contract(&"cold_chain_delivery"), "invalid setup accepts")
+	var invalid_active_id := invalid_gs.active_contract_id
+	check(not invalid_gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"),
+		"cannot resolve before Customs")
+	check(invalid_gs.active_contract_id == invalid_active_id and
+		invalid_gs.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
+		"invalid resolution leaves active contract unchanged")
+	invalid_gs.free()
+
+	var fee_gs: Variant = _at_customs()
+	check(fee_gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"), "fee resolves")
+	check(fee_gs.credits == fee_gs.START_CREDITS + 1150, "fee awards net 1,150 CR")
+	check(fee_gs.heat == 2, "fee preserves Heat")
+	check(fee_gs.active_contract_id == &"", "fee clears active contract")
+	check(fee_gs.get_contract(&"cold_chain_delivery").status == &"completed", "fee completes contract")
+	fee_gs.free()
+
+	var mara_gs: Variant = _at_customs()
+	check(mara_gs.resolve_contract(&"cold_chain_delivery", &"call_mara"), "Mara resolves")
+	check(mara_gs.credits == mara_gs.START_CREDITS + 1400, "Mara awards full payout")
+	check(mara_gs.heat == 2 and mara_gs.mara_favor_owed, "Mara creates only the favor boolean")
+	check(mara_gs.active_contract_id == &"", "Mara clears active contract")
+	check(mara_gs.messages.any(func(message: Dictionary) -> bool: return message.sender == "MARA"),
+		"Mara resolution records a Comms message")
+	mara_gs.free()
+
+	var bypass_gs: Variant = _at_customs()
+	check(bypass_gs.resolve_contract(&"cold_chain_delivery", &"bypass"), "bypass resolves")
+	check(bypass_gs.credits == bypass_gs.START_CREDITS + 1400 and bypass_gs.heat == 4,
+		"bypass trades Heat for full payout")
+	check(bypass_gs.active_contract_id == &"", "bypass clears active contract")
+	bypass_gs.free()
+
+	var abort_gs: Variant = _at_customs()
+	check(abort_gs.resolve_contract(&"cold_chain_delivery", &"abort"), "abort resolves")
+	check(abort_gs.credits == abort_gs.START_CREDITS and abort_gs.heat == 2,
+		"abort changes neither Credits nor Heat")
+	check(abort_gs.active_contract_id == &"", "abort clears active contract")
+	check(abort_gs.get_contract(&"cold_chain_delivery").status == &"failed", "abort fails contract")
+	abort_gs.free()
 
 	gs.free()
