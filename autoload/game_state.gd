@@ -12,6 +12,12 @@ signal workspace_collapsed_changed(collapsed: bool)
 signal active_module_changed(id: StringName)
 signal module_open_changed(open: bool)
 signal ticker_message(text: String, highlight: bool)
+const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
+
+signal contracts_changed
+
+var contracts: Array[Dictionary] = ContractCatalog.all()
+var active_contract_id: StringName = &""
 
 const START_CREDITS := 12480
 const START_DISTRICT := "LOWER VESPER"
@@ -49,6 +55,43 @@ func advance_minutes(minutes: int) -> void:
 		minute_of_day -= 1440
 		day += 1
 	clock_changed.emit(day, minute_of_day)
+
+func _contract_index(id: StringName) -> int:
+	for index in contracts.size():
+		if contracts[index].id == id:
+			return index
+	return -1
+
+func get_contract(id: StringName) -> Dictionary:
+	var index := _contract_index(id)
+	return {} if index < 0 else contracts[index].duplicate(true)
+
+func accept_contract(id: StringName) -> bool:
+	var index := _contract_index(id)
+	if index < 0 or active_contract_id != &"":
+		return false
+	var contract: Dictionary = contracts[index]
+	if not contract.is_playable or contract.status != &"available" or contract.phase != &"offer":
+		return false
+	contract.status = &"active"
+	contract.phase = &"ready_to_proceed"
+	active_contract_id = id
+	contracts_changed.emit()
+	push_ticker("CONTRACT ACCEPTED // " + contract.code, true)
+	return true
+
+func proceed_contract(id: StringName) -> bool:
+	var index := _contract_index(id)
+	if index < 0 or active_contract_id != id:
+		return false
+	var contract: Dictionary = contracts[index]
+	if contract.status != &"active" or contract.phase != &"ready_to_proceed":
+		return false
+	advance_minutes(contract.proceed_minutes)
+	contract.phase = &"customs_hold"
+	contracts_changed.emit()
+	push_ticker("CUSTOMS HOLD // " + contract.destination, true)
+	return true
 
 func set_workspace_collapsed(collapsed: bool) -> void:
 	if workspace_collapsed == collapsed:

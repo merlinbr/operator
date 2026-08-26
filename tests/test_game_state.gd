@@ -59,4 +59,22 @@ func _run() -> void:
 	gs.set_module_open(false)
 	check(gs.module_open == false and open_seen[0] == false, "set_module_open(false) closes")
 
+	var contract_gs := GameStateScript.new()
+	var delivery: Dictionary = contract_gs.get_contract(&"cold_chain_delivery")
+	check(delivery.status == &"available" and delivery.phase == &"offer",
+		"C-1042 starts available in offer phase")
+	check(contract_gs.active_contract_id == &"", "no active contract at start")
+	check(not contract_gs.proceed_contract(&"cold_chain_delivery"),
+		"cannot proceed before accepting")
+	check(contract_gs.accept_contract(&"cold_chain_delivery"), "accepting C-1042 succeeds")
+	check(contract_gs.active_contract_id == &"cold_chain_delivery", "accepted contract becomes active")
+	check(contract_gs.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
+		"accepted contract is ready to proceed")
+	check(contract_gs.proceed_contract(&"cold_chain_delivery"), "proceeding active C-1042 succeeds")
+	check(contract_gs.day == 15 and contract_gs.clock_text() == "01:01",
+		"proceed advances exactly 80 minutes across midnight")
+	check(contract_gs.get_contract(&"cold_chain_delivery").phase == &"customs_hold",
+		"proceed exposes the Customs hold")
+	contract_gs.free()
+
 	gs.free()
