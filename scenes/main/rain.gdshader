@@ -32,7 +32,9 @@ void fragment() {
 	alpha += rain_band(uv, 150.0, 1.15, 0.070, 0.025, 0.050, 0.10, 1.0);
 	alpha += rain_band(uv, 225.0, 0.72, 0.035, 0.018, 0.030, 0.06, 7.0);
 	alpha += rain_band(uv, 90.0, 0.42, 0.110, 0.050, 0.075, 0.045, 13.0);
-	float window_sdf = rounded_box_sdf(uv - vec2(0.5), vec2(0.475), 0.060);
+	float window_sdf = rounded_box_sdf(
+		vec2((uv.x - 0.055) / 0.945, uv.y) - vec2(0.5),
+		vec2(0.475), 0.060);
 	float window_mask = 1.0 - smoothstep(0.0, 0.015, window_sdf);
 	COLOR = vec4(0.706, 0.863, 1.0, min(alpha * intensity * 3.0, 0.30) * window_mask);
 }

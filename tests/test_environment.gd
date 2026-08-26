@@ -4,6 +4,7 @@ const EnvironmentScene := preload("res://scenes/main/environment.tscn")
 const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 const ART_SIZE := Vector2(1672.0, 941.0)
 const WINDOW_UV_RECT := Rect2(0.555, 0.136, 0.219, 0.435)
+const GlintShader := preload("res://scenes/main/glints.gdshader")
 
 func _init() -> void:
 	# SceneTree children receive _ready after the base SceneTree is initialized.
@@ -107,6 +108,37 @@ func _run() -> void:
 		and magenta_spill.size.x < environment.size.x
 		and magenta_spill.size.y < environment.size.y,
 		"spills stay localized to normalized artwork rectangles")
+	var monitor_glints: ColorRect = exterior_light.get_node("MonitorGlints")
+	var neon_glints: ColorRect = exterior_light.get_node("NeonGlints")
+	var kitchen_glints: ColorRect = exterior_light.get_node("KitchenGlints")
+	check(monitor_glints.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and neon_glints.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and kitchen_glints.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"marked glints ignore pointer input")
+	var monitor_material := monitor_glints.material as ShaderMaterial
+	var neon_material := neon_glints.material as ShaderMaterial
+	var kitchen_material := kitchen_glints.material as ShaderMaterial
+	check(monitor_material != null and neon_material != null and kitchen_material != null
+		and monitor_material.shader == GlintShader
+		and neon_material.shader == GlintShader
+		and kitchen_material.shader == GlintShader,
+		"marked glints share the local glint shader")
+	var expected_monitor: Rect2 = environment._art_space_rect_for(
+		environment.size, Rect2(0.075, 0.39, 0.17, 0.20))
+	var expected_neon: Rect2 = environment._art_space_rect_for(
+		environment.size, Rect2(0.70, 0.13, 0.12, 0.43))
+	var expected_kitchen: Rect2 = environment._art_space_rect_for(
+		environment.size, Rect2(0.84, 0.30, 0.13, 0.11))
+	check(monitor_glints.position.is_equal_approx(expected_monitor.position)
+		and monitor_glints.size.is_equal_approx(expected_monitor.size)
+		and neon_glints.position.is_equal_approx(expected_neon.position)
+		and neon_glints.size.is_equal_approx(expected_neon.size)
+		and kitchen_glints.position.is_equal_approx(expected_kitchen.position)
+		and kitchen_glints.size.is_equal_approx(expected_kitchen.size)
+		and monitor_glints.size.x < environment.size.x
+		and neon_glints.size.x < environment.size.x
+		and kitchen_glints.size.x < environment.size.x,
+		"marked glints stay localized to art-space rectangles")
 
 	var lightning: Control = environment.get_node("Lightning")
 	var lightning_timer: Timer = lightning.get_node("LightningTimer")

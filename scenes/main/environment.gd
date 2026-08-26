@@ -5,15 +5,22 @@ const WINDOW_UV_RECT := Rect2(0.555, 0.136, 0.219, 0.435)
 const CYAN_SPILL_UV_RECT := Rect2(0.43, 0.43, 0.24, 0.26)
 const MAGENTA_SPILL_UV_RECT := Rect2(0.68, 0.46, 0.22, 0.28)
 const ROOM_FLASH_UV_RECT := Rect2(0.16, 0.08, 0.72, 0.82)
+const MONITOR_GLINTS_UV_RECT := Rect2(0.075, 0.39, 0.17, 0.20)
+const NEON_GLINTS_UV_RECT := Rect2(0.70, 0.13, 0.12, 0.43)
+const KITCHEN_GLINTS_UV_RECT := Rect2(0.84, 0.30, 0.13, 0.11)
 const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 
 const RainShader := preload("res://scenes/main/rain.gdshader")
+const GlintShader := preload("res://scenes/main/glints.gdshader")
 
 var _background: TextureRect
 var _window_rain: ColorRect
 var _exterior_light: Control
 var _cyan_spill: TextureRect
 var _magenta_spill: TextureRect
+var _monitor_glints: ColorRect
+var _neon_glints: ColorRect
+var _kitchen_glints: ColorRect
 var _lightning: Control
 var _window_flash: ColorRect
 var _room_flash: ColorRect
@@ -52,8 +59,14 @@ func _ready() -> void:
 	_exterior_light.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_cyan_spill = _make_spill("CyanSpill", Color("#39e6ff"), 0.11)
 	_magenta_spill = _make_spill("MagentaSpill", Color("#f25dff"), 0.09)
+	_monitor_glints = _make_glint("MonitorGlints", Color("#66e9ff"), 2.0)
+	_neon_glints = _make_glint("NeonGlints", Color("#e36dff"), 7.0)
+	_kitchen_glints = _make_glint("KitchenGlints", Color("#b9efff"), 13.0)
 	_exterior_light.add_child(_cyan_spill)
 	_exterior_light.add_child(_magenta_spill)
+	_exterior_light.add_child(_monitor_glints)
+	_exterior_light.add_child(_neon_glints)
+	_exterior_light.add_child(_kitchen_glints)
 	add_child(_exterior_light)
 
 	_lightning = Control.new()
@@ -113,6 +126,18 @@ func _make_gradient(color: Color) -> Gradient:
 	gradient.set_color(0, color)
 	gradient.set_color(1, edge_color)
 	return gradient
+
+func _make_glint(glint_name: String, tint: Color, seed: float) -> ColorRect:
+	var glint := ColorRect.new()
+	glint.name = glint_name
+	glint.color = Color.WHITE
+	glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var material := ShaderMaterial.new()
+	material.shader = GlintShader
+	material.set_shader_parameter("tint", tint)
+	material.set_shader_parameter("seed", seed)
+	glint.material = material
+	return glint
 
 func _art_space_rect_for(viewport_size: Vector2, normalized_rect: Rect2) -> Rect2:
 	var art_rect := art_rect_for(viewport_size)
@@ -183,6 +208,15 @@ func apply_environment_layout() -> void:
 	_cyan_spill.position = cyan_rect.position
 	_cyan_spill.size = cyan_rect.size
 	var magenta_rect := _art_space_rect_for(size, MAGENTA_SPILL_UV_RECT)
+	var monitor_rect := _art_space_rect_for(size, MONITOR_GLINTS_UV_RECT)
+	_monitor_glints.position = monitor_rect.position
+	_monitor_glints.size = monitor_rect.size
+	var neon_rect := _art_space_rect_for(size, NEON_GLINTS_UV_RECT)
+	_neon_glints.position = neon_rect.position
+	_neon_glints.size = neon_rect.size
+	var kitchen_rect := _art_space_rect_for(size, KITCHEN_GLINTS_UV_RECT)
+	_kitchen_glints.position = kitchen_rect.position
+	_kitchen_glints.size = kitchen_rect.size
 	_magenta_spill.position = magenta_rect.position
 	_magenta_spill.size = magenta_rect.size
 	var room_flash_rect := _art_space_rect_for(size, ROOM_FLASH_UV_RECT)
