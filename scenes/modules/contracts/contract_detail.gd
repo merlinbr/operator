@@ -42,8 +42,8 @@ func _build_children() -> void:
 
 func _clear_actions() -> void:
 	for child in _actions.get_children():
-		child.free()
-
+		_actions.remove_child(child)
+		child.queue_free()
 func _add_action(text: String, callback: Callable) -> void:
 	var button := Button.new()
 	button.text = text
