@@ -15,8 +15,6 @@ const EnvironmentScene := preload("res://scenes/main/environment.tscn")
 const StatusChipScene := preload("res://scenes/ui/status_chip.tscn")
 const IconRailScene := preload("res://scenes/ui/icon_rail.tscn")
 const TickerBarScene := preload("res://scenes/ui/ticker_bar.tscn")
-const PlaceholderContracts := preload("res://data/placeholder/placeholder_contracts.gd")
-const PlaceholderMessages := preload("res://data/placeholder/placeholder_messages.gd")
 
 const MARGIN := 16.0
 const RAIL_WIDTH := 44.0
@@ -45,6 +43,7 @@ var context_host: Control
 var ticker: Control
 
 var _built := false
+var _selected_contract_id: StringName = &""
 
 func _ready() -> void:
 	_build_shell()
@@ -87,6 +86,7 @@ func _build_shell() -> void:
 	_build_ticker()
 
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
+	gs.contracts_changed.connect(_on_contracts_changed)
 	gs.active_module_changed.connect(func(_id: StringName) -> void: _apply_visibility())
 	gs.module_open_changed.connect(func(_open: bool) -> void: _apply_visibility())
 	gs.ticker_message.connect(func(text: String, highlight: bool) -> void: ticker.push_message(text, highlight))
@@ -165,9 +165,9 @@ func _build_primary_module(id: StringName) -> void:
 	primary_host.add_child(panel)
 	if id == &"contracts":
 		panel.contract_selected.connect(_on_contract_selected)
-		panel.setup(gs, PlaceholderContracts.all())
+		panel.setup(gs, gs.contracts)
 	else:
-		panel.setup(gs, PlaceholderMessages.all() if id == &"comms" else null)
+		panel.setup(gs, gs.messages if id == &"comms" else null)
 	_apply_visibility()
 
 func close_topmost() -> void:
@@ -200,10 +200,37 @@ func close_context() -> void:
 func set_collapsed(collapsed: bool) -> void:
 	gs.set_workspace_collapsed(collapsed)
 
-func _on_contract_selected(contract: Dictionary) -> void:
+func _on_contract_selected(contract_id: StringName) -> void:
+	_selected_contract_id = contract_id
 	var detail: Control = ContractDetailScene.instantiate()
+	detail.accept_requested.connect(_on_contract_accept)
+	detail.proceed_requested.connect(_on_contract_proceed)
+	detail.resolution_requested.connect(_on_contract_resolution)
+	detail.close_requested.connect(_close_contract_detail)
+	detail.acknowledge_requested.connect(_close_contract_detail)
 	open_context(detail)
-	detail.setup(gs, contract)
+	detail.setup(gs, gs.get_contract(contract_id))
+
+func _on_contract_accept(id: StringName) -> void:
+	gs.accept_contract(id)
+
+func _on_contract_proceed(id: StringName) -> void:
+	gs.proceed_contract(id)
+
+func _on_contract_resolution(id: StringName, choice_id: StringName) -> void:
+	gs.resolve_contract(id, choice_id)
+
+func _on_contracts_changed() -> void:
+	if gs.active_module != &"contracts" or not gs.module_open:
+		return
+	var panel := primary_host.get_child(0)
+	panel.setup(gs, gs.contracts)
+	if _selected_contract_id != &"" and context_host.get_child_count() > 0:
+		context_host.get_child(0).setup(gs, gs.get_contract(_selected_contract_id))
+
+func _close_contract_detail() -> void:
+	_selected_contract_id = &""
+	close_context()
 
 func _on_collapsed_changed(collapsed: bool) -> void:
 	_apply_visibility()

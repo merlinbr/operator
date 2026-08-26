@@ -3,7 +3,6 @@ extends "res://tests/test_base.gd"
 const GameStateScript := preload("res://autoload/game_state.gd")
 const HomePanel := preload("res://scenes/modules/home/home_panel.tscn")
 const CommsPanel := preload("res://scenes/modules/comms/comms_panel.tscn")
-const PlaceholderMessages := preload("res://data/placeholder/placeholder_messages.gd")
 
 func _run() -> void:
 	var gs := GameStateScript.new()
@@ -28,7 +27,7 @@ func _run() -> void:
 
 	var comms := CommsPanel.instantiate()
 	root.add_child(comms)
-	comms.setup(gs, PlaceholderMessages.all())
+	comms.setup(gs, gs.messages)
 	var rows := comms.find_children("Row*", "HBoxContainer", true, false)
 	check(rows.size() == 3, "three message rows — got %d" % rows.size())
 	var first_row_text := ""

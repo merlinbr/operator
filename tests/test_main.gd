@@ -48,6 +48,38 @@ func _run() -> void:
 	check(primary.get_child(0).name == "ContractsPanel", "module switching swaps panel")
 	check(gs.active_module == &"contracts", "active module is contracts")
 
+	# selecting C-1042 opens detail beside the unchanged contract network
+	var c1042_row := _button(primary, "COLD-CHAIN DELIVERY   1,400 CR")
+	check(c1042_row != null, "C-1042 row is available")
+	c1042_row.pressed.emit()
+	check(primary.get_child(0).name == "ContractsPanel", "contract network remains in primary")
+	check(context.get_child_count() == 1 and context.get_child(0).name == "ContractDetail",
+		"C-1042 opens ContractDetail in context")
+
+	# closing an offer is non-mutating
+	_button(context, "CLOSE").pressed.emit()
+	check(gs.get_contract(&"cold_chain_delivery").status == &"available",
+		"CLOSE leaves the offer available")
+
+	# a fresh selection drives the accepted, proceeded, and aborted paths
+	_button(primary, "COLD-CHAIN DELIVERY   1,400 CR").pressed.emit()
+	_button(context, "ACCEPT").pressed.emit()
+	check(_button(context, "PROCEED TO DOCK 17") != null,
+		"ACCEPT refreshes detail to proceed")
+	_button(context, "PROCEED TO DOCK 17").pressed.emit()
+	check(gs.day == 15, "PROCEED advances to day 15")
+	check(_button(context, "ABORT DELIVERY") != null,
+		"PROCEED refreshes detail to customs choices")
+	_button(context, "ABORT DELIVERY").pressed.emit()
+	var failed_row := _button(primary, "FAILED // COLD-CHAIN DELIVERY")
+	check(failed_row != null and failed_row.disabled, "ABORT disables the failed C-1042 row")
+	check(_button(context, "ACKNOWLEDGE") != null, "failed detail shows ACKNOWLEDGE")
+	_button(context, "ACKNOWLEDGE").pressed.emit()
+	check(context.get_child_count() == 0 and not context.visible,
+		"ACKNOWLEDGE closes the contract context")
+	check(primary.visible and primary.get_child(0).name == "ContractsPanel",
+		"ACKNOWLEDGE leaves Contract Network open")
+
 	# context opens alongside primary (primary keeps its class width)
 	var primary_w: float = primary.size.x
 	main.open_context(load("res://scenes/modules/contracts/contract_detail.tscn").instantiate())
@@ -106,3 +138,9 @@ func _run() -> void:
 
 	main.queue_free()
 	gs.queue_free()
+
+func _button(control: Control, text: String) -> Button:
+	for button: Button in control.find_children("*", "Button", true, false):
+		if button.text == text:
+			return button
+	return null
