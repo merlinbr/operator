@@ -47,18 +47,22 @@ func _run() -> void:
 		"window rain follows the mapped window rectangle")
 	check(window_rain.material is ShaderMaterial,
 		"window rain uses a ShaderMaterial")
+	var rain_material := window_rain.material as ShaderMaterial
+	check(rain_material != null
+		and rain_material.shader != null
+		and rain_material.shader.resource_path == "res://scenes/main/rain.gdshader",
+		"window rain references the exact local rain shader")
 	check(window_rain.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"window rain ignores pointer input")
 	check(window_rain.size.x < environment.size.x
 		and window_rain.size.y < environment.size.y,
 		"window rain is smaller than the environment viewport")
 
-	check(environment.get_child_count() == 4
-		and environment.get_child(0).name == "ApartmentBackground"
-		and environment.get_child(1).name == "WindowRain"
-		and environment.get_child(2).name == "ExteriorLight"
-		and environment.get_child(3).name == "Lightning",
-		"environment layers have the required direct-child order")
+	var layer_names: Array[StringName] = []
+	for child in environment.get_children():
+		layer_names.append(child.name)
+	check(layer_names == [&"ApartmentBackground", &"WindowRain", &"ExteriorLight", &"Lightning"],
+		"environment visual layers keep their rendering order")
 
 	var exterior_light: Control = environment.get_node("ExteriorLight")
 	var cyan_spill: TextureRect = exterior_light.get_node("CyanSpill")

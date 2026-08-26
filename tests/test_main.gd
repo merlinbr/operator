@@ -3,6 +3,20 @@ extends "res://tests/test_base.gd"
 const GameStateScript := preload("res://autoload/game_state.gd")
 const MainScene := preload("res://scenes/main/main.tscn")
 
+var _main: Control
+var _environment: Control
+var _gs: Node
+
+func _init() -> void:
+	_run()
+	call_deferred("_finish_after_ready")
+
+func _finish_after_ready() -> void:
+	check(_environment.get_child_count() == 4, "environment has four visual layers")
+	_main.queue_free()
+	_gs.queue_free()
+	finish()
+
 func _run() -> void:
 	var gs := GameStateScript.new()
 	gs.name = "GameState"
@@ -10,8 +24,14 @@ func _run() -> void:
 
 	var main := MainScene.instantiate()
 	root.add_child(main)
+	_main = main
+	_gs = gs
 
 	var workspace: Control = main.get_node("Workspace")
+	var environment: Control = main.get_node("EnvironmentLayer")
+	_environment = environment
+	check(main.get_children().find(environment) < main.get_children().find(workspace),
+		"environment renders before workspace UI")
 	var primary: Control = workspace.get_node("PrimaryHost")
 	var context: Control = workspace.get_node("ContextHost")
 	var rail: Control = workspace.get_node("IconRail")
@@ -31,7 +51,6 @@ func _run() -> void:
 		"primary uses fixed gutter from rail")
 	check(absf(rail.position.y - (main.CHIP_TOP + chip.size.y + main.CHIP_GAP)) <= 0.1,
 		"rail keeps shared gap below status HUD")
-
 	# active icon toggles its module closed
 	main.select_module(&"home")
 	check(not primary.visible, "active icon toggles panel closed")
@@ -147,8 +166,6 @@ func _run() -> void:
 	check(absf(status_chip.position.x - (ws.x - status_chip.size.x) * 0.5) <= 1.0,
 		"status HUD is horizontally centered")
 
-	main.queue_free()
-	gs.queue_free()
 
 func _button(control: Control, text: String) -> Button:
 	for button: Button in control.find_children("*", "Button", true, false):
