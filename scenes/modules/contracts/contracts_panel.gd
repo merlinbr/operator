@@ -1,7 +1,7 @@
 extends PanelContainer
 ## Contracts module: the contract network list.
 
-signal contract_selected(contract: Dictionary)
+signal contract_selected(contract_id: StringName)
 
 const GameStateScript := preload("res://autoload/game_state.gd")
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392, 1)
@@ -39,20 +39,30 @@ func setup(_gs: Node, data: Variant = null) -> void:
 	_build_children()
 	var contracts: Array = data if data is Array else []
 	for child in _rows_box.get_children():
-		child.queue_free()
+		child.free()
 	for contract: Dictionary in contracts:
 		var btn := Button.new()
 		btn.text = _row_text(contract)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.focus_mode = Control.FOCUS_NONE
-		btn.pressed.connect(_on_row.bind(contract))
+		var selectable: bool = contract.is_playable and contract.status in [&"available", &"active"]
+		btn.disabled = not selectable
+		if selectable:
+			btn.pressed.connect(_on_row.bind(contract.id))
 		_rows_box.add_child(btn)
 
 func _row_text(contract: Dictionary) -> String:
-	var reward := "?????" if contract.encrypted else GameStateScript.format_credits(contract.reward_credits) + " CR"
-	return "%s   %s" % [contract.title, reward]
+	if not contract.is_playable:
+		return "%s   NETWORK OFFLINE" % contract.title
+	match contract.status:
+		&"active":
+			return "ACTIVE // " + contract.title
+		&"completed":
+			return "COMPLETED // " + contract.title
+		&"failed":
+			return "FAILED // " + contract.title
+		_:
+			return "%s   %s CR" % [contract.title, GameStateScript.format_credits(contract.reward_credits)]
 
-func _on_row(contract: Dictionary) -> void:
-	if contract.encrypted:
-		return # cannot open an encrypted offer yet
-	contract_selected.emit(contract)
+func _on_row(contract_id: StringName) -> void:
+	contract_selected.emit(contract_id)

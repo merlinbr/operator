@@ -11,8 +11,8 @@ func _run() -> void:
 	var panel := ContractsPanel.instantiate()
 	root.add_child(panel)
 
-	var seen_id: StringName = &""
-	panel.contract_selected.connect(func(id: StringName) -> void: seen_id = id)
+	var seen_id := [&""]
+	panel.contract_selected.connect(func(id: StringName) -> void: seen_id[0] = id)
 	panel.setup(gs, gs.contracts)
 
 	var buttons: Array[Button] = []
@@ -27,7 +27,7 @@ func _run() -> void:
 	check(buttons[2].disabled and buttons[2].text.contains("NETWORK OFFLINE"),
 		"encrypted offer is visibly unavailable")
 	buttons[0].pressed.emit()
-	check(seen_id == &"cold_chain_delivery", "C-1042 emits only its ID")
+	check(seen_id[0] == &"cold_chain_delivery", "C-1042 emits only its ID")
 
 	var active_contracts: Array = gs.contracts.duplicate(true)
 	active_contracts[0].status = &"active"
