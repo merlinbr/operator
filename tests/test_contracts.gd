@@ -2,8 +2,6 @@ extends "res://tests/test_base.gd"
 
 const GameStateScript := preload("res://autoload/game_state.gd")
 const ContractsPanel := preload("res://scenes/modules/contracts/contracts_panel.tscn")
-const ContractDetail := preload("res://scenes/modules/contracts/contract_detail.tscn")
-const PlaceholderContracts := preload("res://data/placeholder/placeholder_contracts.gd")
 
 func _run() -> void:
 	var gs := GameStateScript.new()
@@ -13,37 +11,50 @@ func _run() -> void:
 	var panel := ContractsPanel.instantiate()
 	root.add_child(panel)
 
-	var seen := [{}]
-	panel.contract_selected.connect(func(c: Dictionary) -> void: seen[0] = c)
-	panel.setup(gs, PlaceholderContracts.all())
+	var seen_id: StringName = &""
+	panel.contract_selected.connect(func(id: StringName) -> void: seen_id = id)
+	panel.setup(gs, gs.contracts)
 
 	var buttons: Array[Button] = []
 	for child in panel.find_children("*", "Button", true, false):
 		buttons.append(child)
-	check(buttons.size() == 3, "three contract rows")
-	check(buttons[0].text.contains("Freight Transfer") and buttons[0].text.contains("1,400 CR"),
-		"row text with formatted reward")
-	check(buttons[2].text.contains("[ENCRYPTED OFFER]") and buttons[2].text.contains("?????"),
-		"encrypted row hides reward")
+	check(buttons.size() == 3, "three catalog rows")
+	check(buttons[0].text.contains("COLD-CHAIN DELIVERY") and buttons[0].text.contains("1,400 CR"),
+		"C-1042 shows its available reward")
+	check(not buttons[0].disabled, "C-1042 is selectable")
+	check(buttons[1].disabled and buttons[1].text.contains("NETWORK OFFLINE"),
+		"Data Retrieval is visibly unavailable")
+	check(buttons[2].disabled and buttons[2].text.contains("NETWORK OFFLINE"),
+		"encrypted offer is visibly unavailable")
+	buttons[0].pressed.emit()
+	check(seen_id == &"cold_chain_delivery", "C-1042 emits only its ID")
 
-	buttons[1].pressed.emit()
-	check(seen[0].get("id", &"") == &"data_retrieval", "selecting row emits contract")
-	buttons[2].pressed.emit()
-	check(seen[0].get("id", &"") == &"data_retrieval", "encrypted row does not emit")
+	var active_contracts: Array = gs.contracts.duplicate(true)
+	active_contracts[0].status = &"active"
+	panel.setup(gs, active_contracts)
+	buttons = []
+	for child in panel.find_children("*", "Button", true, false):
+		buttons.append(child)
+	check(not buttons[0].disabled and buttons[0].text.contains("ACTIVE"),
+		"active C-1042 is selectable and visibly active")
+
+	var completed_contracts: Array = gs.contracts.duplicate(true)
+	completed_contracts[0].status = &"completed"
+	panel.setup(gs, completed_contracts)
+	buttons = []
+	for child in panel.find_children("*", "Button", true, false):
+		buttons.append(child)
+	check(buttons[0].disabled and buttons[0].text.contains("COMPLETED"),
+		"completed C-1042 is disabled and visibly completed")
+
+	var failed_contracts: Array = gs.contracts.duplicate(true)
+	failed_contracts[0].status = &"failed"
+	panel.setup(gs, failed_contracts)
+	buttons = []
+	for child in panel.find_children("*", "Button", true, false):
+		buttons.append(child)
+	check(buttons[0].disabled and buttons[0].text.contains("FAILED"),
+		"failed C-1042 is disabled and visibly failed")
+
 	panel.queue_free()
-
-	var detail := ContractDetail.instantiate()
-	root.add_child(detail)
-	detail.setup(gs, PlaceholderContracts.all()[1])
-	var detail_text := ""
-	for label in detail.find_children("*", "Label", true, false):
-		detail_text += label.text + "\n"
-	check(detail_text.contains("Data Retrieval"), "detail title")
-	check(detail_text.contains("4,200 CR") and detail_text.contains("SECTOR 9"), "detail body fields")
-	detail.setup(gs, PlaceholderContracts.all()[2])
-	var enc_text := ""
-	for label in detail.find_children("*", "Label", true, false):
-		enc_text += label.text + "\n"
-	check(enc_text.contains("?????") and enc_text.contains("ENCRYPTED"), "encrypted detail redacted")
-	detail.queue_free()
 	gs.queue_free()
