@@ -44,6 +44,12 @@ func _clear_actions() -> void:
 	for child in _actions.get_children():
 		_actions.remove_child(child)
 		child.queue_free()
+
+func _add_preview(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", COLOR_DIM)
+	_actions.add_child(label)
 func _add_action(text: String, callback: Callable) -> void:
 	var button := Button.new()
 	button.text = text
@@ -109,6 +115,7 @@ func _render_customs(c: Dictionary) -> void:
 	_body.text = c.complication.body
 	for choice: Dictionary in c.complication.choices:
 		var choice_id: StringName = choice.id
+		_add_preview(choice.preview)
 		_add_action(choice.label, _emit_resolution.bind(choice_id))
 
 func _emit_resolution(choice_id: StringName) -> void:
@@ -120,8 +127,13 @@ func _render_resolved(c: Dictionary) -> void:
 	_title.text = "CONTRACT COMPLETE" if c.status == &"completed" else "CONTRACT FAILED"
 	_body.text = "\n".join([
 		c.title,
-		"CREDITS     %+d CR" % choice.credit_delta,
+		"RESULT      " + choice.result,
+		"CREDITS     " + _credit_delta_text(choice.credit_delta) + " CR",
 		"HEAT        %+d" % choice.heat_delta,
 	])
 	_add_action("ACKNOWLEDGE", func() -> void: acknowledge_requested.emit())
+
+func _credit_delta_text(delta: int) -> String:
+	var sign := "+" if delta >= 0 else "-"
+	return sign + GameStateScript.format_credits(absi(delta))
 

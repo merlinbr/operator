@@ -25,19 +25,27 @@ static func all() -> Array[Dictionary]:
 					{
 						"id": &"pay_fee", "label": "PAY CLEARANCE FEE // 250 CR",
 						"credit_delta": 1150, "heat_delta": 0, "terminal_status": &"completed",
+						"preview": "+1,150 CR // HEAT +0 // CONTRACT COMPLETE",
+						"result": "CLEARANCE PAID // CARGO RELEASED",
 					},
 					{
 						"id": &"call_mara", "label": "CALL MARA",
 						"credit_delta": 1400, "heat_delta": 0, "terminal_status": &"completed",
 						"sets_mara_favor_owed": true,
+						"preview": "+1,400 CR // HEAT +0 // CONTRACT COMPLETE // MARA FAVOR OWED",
+						"result": "MARA CALLED // FAVOR OWED",
 					},
 					{
 						"id": &"bypass", "label": "BYPASS INSPECTION",
 						"credit_delta": 1400, "heat_delta": 2, "terminal_status": &"completed",
+						"preview": "+1,400 CR // HEAT +2 // CONTRACT COMPLETE",
+						"result": "INSPECTION BYPASSED // CAMERAS ALERTED",
 					},
 					{
 						"id": &"abort", "label": "ABORT DELIVERY",
 						"credit_delta": 0, "heat_delta": 0, "terminal_status": &"failed",
+						"preview": "+0 CR // HEAT +0 // CONTRACT FAILED",
+						"result": "DELIVERY ABORTED // CARGO LOST",
 					},
 				],
 			},

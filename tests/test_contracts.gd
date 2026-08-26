@@ -105,9 +105,11 @@ func _run() -> void:
 	customs.status = &"active"
 	customs.phase = &"customs_hold"
 	detail.setup(gs, customs)
+	var customs_text := _text(detail)
 	for choice: Dictionary in customs.complication.choices:
 		var choice_button := _button(detail, choice.label)
 		check(choice_button != null, "customs shows " + choice.label)
+		check(customs_text.contains(choice.preview), "customs previews " + choice.id)
 		choice_button.pressed.emit()
 		check(resolution_contract[0] == &"cold_chain_delivery" and resolution_choice[0] == choice.id,
 			"customs emits the selected choice ID")
@@ -119,7 +121,12 @@ func _run() -> void:
 	completed.phase = &"resolved"
 	completed.resolution_id = &"pay_fee"
 	detail.setup(gs, completed)
-	check(_text(detail).contains("CONTRACT COMPLETE"), "completed shows terminal status")
+	var completed_text := _text(detail)
+	check(completed_text.contains("CONTRACT COMPLETE"), "completed shows terminal status")
+	check(completed_text.contains(completed.complication.choices[0].result),
+		"completed shows the authored operational result")
+	check(completed_text.contains("CREDITS     +1,150 CR"),
+		"completed formats the credit delta")
 	check(_button(detail, "ACKNOWLEDGE") != null, "completed shows ACKNOWLEDGE")
 	_button(detail, "ACKNOWLEDGE").pressed.emit()
 	check(acknowledge_count[0] == 1, "completed ACKNOWLEDGE emits its intent")
@@ -129,7 +136,12 @@ func _run() -> void:
 	failed.phase = &"resolved"
 	failed.resolution_id = &"abort"
 	detail.setup(gs, failed)
-	check(_text(detail).contains("CONTRACT FAILED"), "failed shows terminal status")
+	var failed_text := _text(detail)
+	check(failed_text.contains("CONTRACT FAILED"), "failed shows terminal status")
+	check(failed_text.contains(failed.complication.choices[3].result),
+		"failed shows the authored operational result")
+	check(failed_text.contains("CREDITS     +0 CR"),
+		"failed formats a zero credit delta")
 	check(_button(detail, "ACKNOWLEDGE") != null, "failed shows ACKNOWLEDGE")
 	check(detail.find_children("*", "Button", true, false).size() == 1,
 		"resolved action cleanup leaves only ACKNOWLEDGE")

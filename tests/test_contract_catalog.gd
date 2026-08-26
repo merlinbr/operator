@@ -15,6 +15,11 @@ func _run() -> void:
 	check(delivery.is_playable and delivery.status == &"available" and delivery.phase == &"offer",
 		"delivery starts playable and available")
 	check(delivery.complication.choices.size() == 4, "delivery has four deterministic Customs choices")
+	for choice: Dictionary in delivery.complication.choices:
+		check(choice.has("preview") and not choice.preview.is_empty(),
+			"each Customs choice has an authored consequence preview")
+		check(choice.has("result") and not choice.result.is_empty(),
+			"each Customs choice has an authored operational result")
 
 	check(not contracts[1].is_playable and not contracts[2].is_playable,
 		"other catalog offers start unavailable")
