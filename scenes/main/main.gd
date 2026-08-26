@@ -22,7 +22,7 @@ const MARGIN := 16.0
 const RAIL_WIDTH := 44.0
 const RAIL_GAP := 16.0
 const CHIP_TOP := 12.0
-const CHIP_GAP := 14.0
+const CHIP_GAP := 24.0
 const TICKER_HEIGHT := 30.0
 const TICKER_TOP_GAP := 4.0
 const TICKER_BOTTOM_GAP := 0.0
@@ -243,8 +243,8 @@ func _apply_layout() -> void:
 	ticker.position = Vector2(0.0, ws_size.y - TICKER_HEIGHT - TICKER_BOTTOM_GAP)
 	ticker.size = Vector2(ws_size.x, TICKER_HEIGHT)
 
-	var r_left: float = MARGIN + RAIL_WIDTH + RAIL_GAP + PANEL_INSET
-	var r_top: float = content_top + PANEL_INSET
+	var r_left: float = MARGIN + RAIL_WIDTH + RAIL_GAP
+	var r_top: float = content_top
 	var r_right: float = ws_size.x - MARGIN - PANEL_INSET
 	var r_bottom: float = content_bottom - PANEL_INSET
 	var r_w: float = r_right - r_left

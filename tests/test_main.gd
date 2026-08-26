@@ -14,6 +14,8 @@ func _run() -> void:
 	var workspace: Control = main.get_node("Workspace")
 	var primary: Control = workspace.get_node("PrimaryHost")
 	var context: Control = workspace.get_node("ContextHost")
+	var rail: Control = workspace.get_node("IconRail")
+	var chip: Control = workspace.get_node("StatusChip")
 
 	check(main.theme != null, "theme applied at Main root")
 	check(primary.get_child_count() == 1, "home panel active on start")
@@ -23,6 +25,12 @@ func _run() -> void:
 	var ws: Vector2 = workspace.size if workspace.size.x > 0 else Vector2(1920, 1080)
 	check(primary.size.x < ws.x * 0.5, "home width is compact")
 	check(primary.size.y < ws.y * 0.6, "home height is compact")
+	check(absf(primary.position.y - rail.position.y) <= 0.1,
+		"primary top aligns with first rail module")
+	check(absf(primary.position.x - (rail.position.x + rail.size.x + main.RAIL_GAP)) <= 0.1,
+		"primary uses fixed gutter from rail")
+	check(absf(rail.position.y - (main.CHIP_TOP + chip.size.y + main.CHIP_GAP)) <= 0.1,
+		"rail keeps shared gap below status HUD")
 
 	# active icon toggles its module closed
 	main.select_module(&"home")
@@ -44,6 +52,8 @@ func _run() -> void:
 	var primary_w: float = primary.size.x
 	main.open_context(load("res://scenes/modules/contracts/contract_detail.tscn").instantiate())
 	check(context.visible and context.get_child_count() == 1, "context opens with content")
+	check(absf(context.position.y - rail.position.y) <= 0.1,
+		"context top aligns with first rail module")
 	check(absf(primary.size.x - primary_w) < 1.0, "primary keeps class width when context opens")
 	check(primary.position.x + primary.size.x + main.CONTEXT_GAP + context.size.x < ws.x,
 		"environment remains visible to the right of panels")
