@@ -56,7 +56,18 @@ func _run() -> void:
 	check(context.get_child_count() == 1 and context.get_child(0).name == "ContractDetail",
 		"C-1042 opens ContractDetail in context")
 
+	# shared context closure also drops the transient selection
+	main.close_topmost()
+	check(not context.visible and main._selected_contract_id == &"",
+		"Esc clears the selected contract with its context")
+
+	# a separate offer run proves CLOSE is non-mutating
+	c1042_row = _button(primary, "COLD-CHAIN DELIVERY   1,400 CR")
+	c1042_row.pressed.emit()
+	check(context.get_child_count() == 1, "fresh C-1042 selection opens context")
+
 	# closing an offer is non-mutating
+
 	_button(context, "CLOSE").pressed.emit()
 	check(gs.get_contract(&"cold_chain_delivery").status == &"available",
 		"CLOSE leaves the offer available")

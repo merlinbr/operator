@@ -192,6 +192,7 @@ func open_context(content: Control) -> void:
 	_apply_visibility()
 
 func close_context() -> void:
+	_selected_contract_id = &""
 	for child in context_host.get_children():
 		context_host.remove_child(child)
 		child.queue_free()
