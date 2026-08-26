@@ -53,6 +53,85 @@ func _run() -> void:
 		and window_rain.size.y < environment.size.y,
 		"window rain is smaller than the environment viewport")
 
+	check(environment.get_child_count() == 4
+		and environment.get_child(0).name == "ApartmentBackground"
+		and environment.get_child(1).name == "WindowRain"
+		and environment.get_child(2).name == "ExteriorLight"
+		and environment.get_child(3).name == "Lightning",
+		"environment layers have the required direct-child order")
+
+	var exterior_light: Control = environment.get_node("ExteriorLight")
+	var cyan_spill: TextureRect = exterior_light.get_node("CyanSpill")
+	var magenta_spill: TextureRect = exterior_light.get_node("MagentaSpill")
+	check(exterior_light.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and cyan_spill.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and magenta_spill.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and cyan_spill is TextureRect
+		and magenta_spill is TextureRect,
+		"exterior light and both spills ignore pointer input")
+	var cyan_texture := cyan_spill.texture as GradientTexture2D
+	var magenta_texture := magenta_spill.texture as GradientTexture2D
+	check(cyan_texture != null and magenta_texture != null
+		and cyan_texture.fill == GradientTexture2D.FILL_RADIAL
+		and magenta_texture.fill == GradientTexture2D.FILL_RADIAL
+		and cyan_spill.stretch_mode == TextureRect.STRETCH_SCALE
+		and magenta_spill.stretch_mode == TextureRect.STRETCH_SCALE,
+		"spills use radial gradient textures and scaled stretching")
+	check(cyan_texture.gradient.get_color(0).a > 0.0
+		and cyan_texture.gradient.get_color(1).a == 0.0
+		and magenta_texture.gradient.get_color(0).a > 0.0
+		and magenta_texture.gradient.get_color(1).a == 0.0
+		and cyan_spill.modulate.a > 0.0 and cyan_spill.modulate.a <= 0.12
+		and magenta_spill.modulate.a > 0.0 and magenta_spill.modulate.a <= 0.10,
+		"spills have colored centers, transparent edges, and faint alpha")
+	var cyan_center: Color = cyan_texture.gradient.get_color(0)
+	var magenta_center: Color = magenta_texture.gradient.get_color(0)
+	check(cyan_center.g > cyan_center.r and cyan_center.b > cyan_center.r
+		and magenta_center.r > magenta_center.g
+		and magenta_center.b > magenta_center.g,
+		"spill centers retain distinct cyan and magenta colors")
+	var expected_cyan: Rect2 = environment._art_space_rect_for(
+		environment.size, Rect2(0.43, 0.43, 0.24, 0.26))
+	var expected_magenta: Rect2 = environment._art_space_rect_for(
+		environment.size, Rect2(0.68, 0.46, 0.22, 0.28))
+	check(cyan_spill.position.is_equal_approx(expected_cyan.position)
+		and cyan_spill.size.is_equal_approx(expected_cyan.size)
+		and magenta_spill.position.is_equal_approx(expected_magenta.position)
+		and magenta_spill.size.is_equal_approx(expected_magenta.size)
+		and cyan_spill.size.x < environment.size.x
+		and cyan_spill.size.y < environment.size.y
+		and magenta_spill.size.x < environment.size.x
+		and magenta_spill.size.y < environment.size.y,
+		"spills stay localized to normalized artwork rectangles")
+
+	var lightning: Control = environment.get_node("Lightning")
+	var lightning_timer: Timer = lightning.get_node("LightningTimer")
+	var window_flash: ColorRect = lightning.get_node("WindowFlash")
+	var room_flash: ColorRect = lightning.get_node("RoomFlash")
+	check(lightning.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and lightning_timer.get_parent() == lightning
+		and lightning_timer.one_shot
+		and lightning_timer.wait_time >= 45.0
+		and lightning_timer.wait_time <= 150.0
+		and lightning_timer.time_left > 0.0,
+		"lightning ignores input and owns a scheduled one-shot timer")
+	check(window_flash.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and room_flash.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and is_zero_approx(window_flash.modulate.a)
+		and is_zero_approx(room_flash.modulate.a),
+		"lightning flashes ignore input and start transparent")
+	check(window_flash.position.is_equal_approx(expected_window_16x9.position)
+		and window_flash.size.is_equal_approx(expected_window_16x9.size)
+		and room_flash.size.x < environment.size.x
+		and room_flash.size.y < environment.size.y,
+		"window flash maps to the window and room flash stays local")
+	environment._trigger_lightning()
+	check(window_flash.modulate.a > 0.0 and room_flash.modulate.a > 0.0,
+		"lightning trigger raises both flash alphas immediately")
+	await create_timer(0.30).timeout
+	check(window_flash.modulate.a <= 0.01 and room_flash.modulate.a <= 0.01,
+		"lightning flashes decay back to transparent")
+
 	var square_size := Vector2(1000.0, 1000.0)
 	var square_scale := maxf(square_size.x / ART_SIZE.x, square_size.y / ART_SIZE.y)
 	var square_art_size := ART_SIZE * square_scale
