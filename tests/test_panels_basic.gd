@@ -5,6 +5,12 @@ const HomePanel := preload("res://scenes/modules/home/home_panel.tscn")
 const CommsPanel := preload("res://scenes/modules/comms/comms_panel.tscn")
 
 func _run() -> void:
+	var ambience_bus := AudioServer.get_bus_index(&"Ambience")
+	var sfx_bus := AudioServer.get_bus_index(&"SFX")
+	check(ambience_bus >= 0 and AudioServer.get_bus_send(ambience_bus) == &"Master",
+		"Ambience bus routes to Master")
+	check(sfx_bus >= 0 and AudioServer.get_bus_send(sfx_bus) == &"Master",
+		"SFX bus routes to Master")
 	var gs := GameStateScript.new()
 	gs.name = "GameState"
 	root.add_child(gs)
