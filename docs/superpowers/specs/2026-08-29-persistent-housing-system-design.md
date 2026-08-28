@@ -15,9 +15,9 @@ Authored residence data is static. Mutable lease/ownership data belongs only in 
 | ID | Residence | Artwork | Monthly rent | Move-in cost | Ownership |
 |---|---|---|---:|---:|---|
 | `lower_vesper_studio` | Lower Vesper Studio | Existing `tier-1-appartment.png` | 2,000 CR / 30 days | None for the starting lease | Optional 150,000 CR buyout while resident. |
-| `sector_9_loft` | Sector 9 Loft | Supplied `tier-2-apartment.png` | 6,000 CR / 30 days | 8,000 CR, covering the first 30-day term and relocation | Rental only. |
+| `sector_9_loft` | Sector 9 Loft | Supplied `tier-2-appartment-update.png` | 6,000 CR / 30 days | 8,000 CR, covering the first 30-day term and relocation | Rental only. |
 
-The Loft artwork must be 16:9 and retain the existing painted-window composition. Its intended reward is a visibly better life, not a contract, combat, or Heat modifier. A later equipment system may make residence space mechanically useful; this scope creates no unused capacity counters or equipment rules.
+The Loft artwork is 16:9 and is the visible Tier-2 reward. It uses a separately calibrated environment-art profile: its window, spill, glint, and lightning rectangles are authored against this artwork rather than reusing Tier 1's coordinates. Its intended reward is a visibly better life, not a contract, combat, or Heat modifier. A later equipment system may make residence space mechanically useful; this scope creates no unused capacity counters or equipment rules.
 
 The player begins as the Studio's tenant on Day 14 with the first studio payment due on Day 30. The initial studio move-in cost is historical and is not deducted from starting Credits.
 

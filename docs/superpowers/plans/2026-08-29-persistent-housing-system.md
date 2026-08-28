@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Implement `docs/superpowers/specs/2026-08-29-persistent-housing-system-design.md` exactly.
-- Supply `res://assets/tier-2-apartment.png`, 16:9 and window-composition compatible, before environment integration.
+- Supply `res://assets/tier-2-appartment-update.png`, 1672×941, before environment integration; calibrate a Tier-2 environment-art profile rather than reusing Tier-1 effect coordinates.
 - Persist at `user://operator_save.json`; malformed data starts clean and reports one actionable error.
 - No financing, debt interest, eviction, equipment, contract buffs, extra residences, audio changes, or workspace redesign.
 - Prefix shell commands with `rtk`.
@@ -75,9 +75,9 @@
 - Modify: `tests/test_environment.gd`
 - Modify: `tests/test_main.gd`
 
-- [ ] Write failing tests proving Studio selects existing art, Loft selects `tier-2-apartment.png`, and a residence change leaves Workspace order, effect nodes, mouse filtering, and time profiles unchanged.
+- [ ] Write failing tests proving Studio selects existing art, Loft selects `tier-2-appartment-update.png`, and each residence uses its authored window/effect rectangles without changing Workspace order, mouse filtering, or time profiles.
 - [ ] Run `rtk powershell -ExecutionPolicy Bypass -File tests/run_test.ps1 test_environment` and `test_main`; expect art-selection failures.
-- [ ] Add a Tier-2 preload and a residence-change callback in Environment. Change only `ApartmentBackground.texture`; retain all calibrated effect geometry and child order. Main continues injected-state ownership and forwards Home intents only.
+- [ ] Add the Tier-2 preload plus an authored per-residence art profile for source size, window, spill, glint, and lightning UV rectangles. On residence change, select the texture and its profile; retain the existing effect-node order and workspace behavior.
 - [ ] Re-run both focused tests; expect `RESULT: ALL PASSED`.
 - [ ] Run full suite: `rtk powershell -NoProfile -Command "Get-ChildItem tests/test_*.gd | ForEach-Object { & .\tests\run_test.ps1 $_.BaseName; if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE } }"`.
 - [ ] Manually verify REST, automatic/due/overdue recovery, Studio/Loft move, Studio buyout, restart persistence, corrupt-save recovery, and both artworks.

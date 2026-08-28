@@ -17,10 +17,10 @@ The plan is authoritative for task order, exact methods, tests, commands, and co
 Provide exactly one new image before environment work:
 
 ```text
-res://assets/tier-2-apartment.png
+res://assets/tier-2-appartment-update.png
 ```
 
-It must be 16:9 and preserve the Tier-1 image's painted-window composition. The existing normalized window/rain/glint/lightning calibration must remain valid; no fallback art or recalibration system is allowed.
+It is 1672×941 (16:9) and is ready to use. Do not reuse Tier 1's normalized window/rain/glint/lightning coordinates: calibrate a separate authored environment-art profile for the Loft. No fallback art is allowed.
 
 ## Goal
 
