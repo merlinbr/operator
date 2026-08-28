@@ -7,6 +7,22 @@ func _at_customs() -> Variant:
 	check(gs.proceed_contract(&"cold_chain_delivery"), "proceed setup succeeds")
 	return gs
 
+func _resolve_c1042(gs: Node, choice_id: StringName) -> void:
+	check(gs.accept_contract(&"cold_chain_delivery"), "C-1042 accept setup succeeds")
+	check(gs.proceed_contract(&"cold_chain_delivery"), "C-1042 proceed setup succeeds")
+	check(gs.resolve_contract(&"cold_chain_delivery", choice_id), "C-1042 resolution setup succeeds")
+
+func _at_data_customs(gs: Node, c1042_choice: StringName) -> void:
+	_resolve_c1042(gs, c1042_choice)
+	check(gs.accept_contract(&"data_retrieval"), "D-207 accept setup succeeds")
+	check(gs.proceed_contract(&"data_retrieval"), "D-207 proceed setup succeeds")
+
+func _choice_ids(contract: Dictionary) -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for choice: Dictionary in contract.complication.choices:
+		ids.append(choice.id)
+	return ids
+
 func _run() -> void:
 	var gs := GameStateScript.new()
 
@@ -123,4 +139,87 @@ func _run() -> void:
 	check(abort_gs.get_contract(&"cold_chain_delivery").status == &"failed", "abort fails contract")
 	abort_gs.free()
 
+	var locked_gs := GameStateScript.new()
+	check(not locked_gs.get_contract(&"data_retrieval").is_playable
+		and not locked_gs.get_contract(&"clinic_asset_recovery").is_playable,
+		"only C-1042 is playable in fresh state")
+	check(not locked_gs.accept_contract(&"data_retrieval"), "locked D-207 cannot be accepted")
+	locked_gs.free()
+
+	var failure_unlock_gs := GameStateScript.new()
+	_resolve_c1042(failure_unlock_gs, &"abort")
+	check(failure_unlock_gs.get_contract(&"data_retrieval").is_playable,
+		"failed C-1042 still unlocks D-207")
+	check(failure_unlock_gs.accept_contract(&"data_retrieval"),
+		"D-207 accepts after failed C-1042")
+	check(failure_unlock_gs.proceed_contract(&"data_retrieval"),
+		"D-207 proceeds after failed C-1042")
+	check(failure_unlock_gs.resolve_contract(&"data_retrieval", &"abort"), "D-207 abort resolves")
+	check(failure_unlock_gs.get_contract(&"clinic_asset_recovery").is_playable,
+		"failed D-207 still unlocks R-311")
+	failure_unlock_gs.free()
+
+	var low_heat_gs := GameStateScript.new()
+	_at_data_customs(low_heat_gs, &"pay_fee")
+	var low_heat_ids := _choice_ids(low_heat_gs.get_contract(&"data_retrieval"))
+	check(low_heat_ids.has(&"spoof_credentials") and not low_heat_ids.has(&"routed_vendor_id"),
+		"Heat below four exposes spoof credentials only")
+	check(low_heat_gs.resolve_contract(&"data_retrieval", &"spoof_credentials"),
+		"low-Heat spoof resolves")
+	check(low_heat_gs.credits == low_heat_gs.START_CREDITS + 1150 + 4200
+		and low_heat_gs.heat == 2,
+		"spoof awards full data reward without Heat")
+	check(low_heat_gs.get_contract(&"clinic_asset_recovery").is_playable,
+		"D-207 completion unlocks R-311")
+	low_heat_gs.free()
+
+	var high_heat_gs := GameStateScript.new()
+	_at_data_customs(high_heat_gs, &"bypass")
+	var high_heat_ids := _choice_ids(high_heat_gs.get_contract(&"data_retrieval"))
+	check(not high_heat_ids.has(&"spoof_credentials") and high_heat_ids.has(&"routed_vendor_id"),
+		"Heat four replaces spoof credentials with routed vendor ID")
+	var high_heat_credits := high_heat_gs.credits
+	check(not high_heat_gs.resolve_contract(&"data_retrieval", &"spoof_credentials"),
+		"hidden spoof credential choice is rejected")
+	check(high_heat_gs.credits == high_heat_credits
+		and high_heat_gs.active_contract_id == &"data_retrieval",
+		"hidden choice rejection does not mutate state")
+	check(high_heat_gs.resolve_contract(&"data_retrieval", &"routed_vendor_id"),
+		"routed vendor ID resolves at Heat four")
+	check(high_heat_gs.credits == high_heat_gs.START_CREDITS + 1400 + 3550
+		and high_heat_gs.heat == 4,
+		"routed vendor ID pays its authored reduced reward without new Heat")
+	high_heat_gs.free()
+
+	var favor_portfolio_gs := GameStateScript.new()
+	_at_data_customs(favor_portfolio_gs, &"call_mara")
+	check(favor_portfolio_gs.resolve_contract(&"data_retrieval", &"buy_token"),
+		"Mara setup resolves D-207")
+	check(favor_portfolio_gs.accept_contract(&"clinic_asset_recovery"),
+		"R-311 accepts after D-207")
+	check(favor_portfolio_gs.proceed_contract(&"clinic_asset_recovery"),
+		"R-311 proceeds")
+	var recovery_ids := _choice_ids(favor_portfolio_gs.get_contract(&"clinic_asset_recovery"))
+	check(recovery_ids.has(&"settle_mara_favor"),
+		"R-311 exposes favor settlement when owed")
+	check(favor_portfolio_gs.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor"),
+		"favor settlement resolves")
+	check(not favor_portfolio_gs.mara_favor_owed
+		and favor_portfolio_gs.credits == favor_portfolio_gs.START_CREDITS + 1400 + 3800 + 2600,
+		"favor settlement clears the flag and applies its lower reward")
+	favor_portfolio_gs.free()
+
+	var no_favor_gs := GameStateScript.new()
+	_at_data_customs(no_favor_gs, &"pay_fee")
+	check(no_favor_gs.resolve_contract(&"data_retrieval", &"buy_token"),
+		"no-favor setup resolves D-207")
+	check(no_favor_gs.accept_contract(&"clinic_asset_recovery"),
+		"no-favor R-311 accepts")
+	check(no_favor_gs.proceed_contract(&"clinic_asset_recovery"),
+		"no-favor R-311 proceeds")
+	check(not _choice_ids(no_favor_gs.get_contract(&"clinic_asset_recovery")).has(&"settle_mara_favor"),
+		"R-311 hides settlement when no favor is owed")
+	check(not no_favor_gs.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor"),
+		"hidden favor settlement is rejected")
+	no_favor_gs.free()
 	gs.free()

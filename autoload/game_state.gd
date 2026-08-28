@@ -80,7 +80,32 @@ func _contract_index(id: StringName) -> int:
 
 func get_contract(id: StringName) -> Dictionary:
 	var index := _contract_index(id)
-	return {} if index < 0 else contracts[index].duplicate(true)
+	if index < 0:
+		return {}
+	var snapshot: Dictionary = contracts[index].duplicate(true)
+	if snapshot.has("complication"):
+		snapshot.complication.choices = _available_choices(contracts[index])
+	return snapshot
+
+func _available_choices(contract: Dictionary) -> Array[Dictionary]:
+	var available: Array[Dictionary] = []
+	if not contract.has("complication"):
+		return available
+	for choice: Dictionary in contract.complication.choices:
+		if choice.has("max_heat") and heat > int(choice.max_heat):
+			continue
+		if choice.has("min_heat") and heat < int(choice.min_heat):
+			continue
+		if choice.get("requires_mara_favor", false) and not mara_favor_owed:
+			continue
+		available.append(choice)
+	return available
+
+func _choice(choices: Array[Dictionary], choice_id: StringName) -> Dictionary:
+	for choice: Dictionary in choices:
+		if choice.id == choice_id:
+			return choice
+	return {}
 
 func accept_contract(id: StringName) -> bool:
 	var index := _contract_index(id)
@@ -94,7 +119,7 @@ func accept_contract(id: StringName) -> bool:
 	active_contract_id = id
 	contracts_changed.emit()
 	push_ticker("CONTRACT ACCEPTED // " + contract.code, true)
-	add_message("MARA", "Keep it cold. Keep it boring.")
+	add_message("MARA", contract.accept_message)
 	return true
 
 func proceed_contract(id: StringName) -> bool:
@@ -107,15 +132,10 @@ func proceed_contract(id: StringName) -> bool:
 	advance_minutes(contract.proceed_minutes)
 	contract.phase = &"customs_hold"
 	contracts_changed.emit()
-	push_ticker("CUSTOMS HOLD // " + contract.destination, true)
-	add_message("MARA", "Customs is fishing for an excuse.")
+	push_ticker(contract.complication.title, true)
+	add_message("MARA", contract.proceed_message)
 	return true
  
-func _choice(contract: Dictionary, choice_id: StringName) -> Dictionary:
-	for choice: Dictionary in contract.complication.choices:
-		if choice.id == choice_id:
-			return choice
-	return {}
 
 func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	var index := _contract_index(id)
@@ -124,7 +144,7 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	var contract: Dictionary = contracts[index]
 	if contract.status != &"active" or contract.phase != &"customs_hold":
 		return false
-	var choice := _choice(contract, choice_id)
+	var choice := _choice(_available_choices(contract), choice_id)
 	if choice.is_empty():
 		return false
 	if choice.credit_delta != 0:
@@ -133,28 +153,27 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 		heat += choice.heat_delta
 	if choice.get("sets_mara_favor_owed", false):
 		mara_favor_owed = true
+	if choice.get("clears_mara_favor", false):
+		mara_favor_owed = false
+	_unlock_contract(choice.get("unlocks_contract_id", &""))
 	contract.status = choice.terminal_status
 	contract.phase = &"resolved"
 	contract.resolution_id = choice_id
 	active_contract_id = &""
 	contracts_changed.emit()
-	_push_resolution_feedback(choice_id)
+	_push_resolution_feedback(choice)
 	return true
 
-func _push_resolution_feedback(choice_id: StringName) -> void:
-	match choice_id:
-		&"pay_fee":
-			push_ticker("CONTRACT COMPLETE // +1,150 CR", true)
-			add_message("MARA", "Paperwork cost less than a seizure.")
-		&"call_mara":
-			push_ticker("CONTRACT COMPLETE // +1,400 CR", true)
-			add_message("MARA", "You owe me one.")
-		&"bypass":
-			push_ticker("CONTRACT COMPLETE // +1,400 CR // HEAT +2", true)
-			add_message("MARA", "The crate moved; so did their cameras.")
-		&"abort":
-			push_ticker("CONTRACT FAILED // DELIVERY ABORTED", true)
-			add_message("MARA", "Walking was cheaper than escalation.")
+func _unlock_contract(id: StringName) -> void:
+	if id == &"":
+		return
+	var index := _contract_index(id)
+	if index >= 0:
+		contracts[index].is_playable = true
+
+func _push_resolution_feedback(choice: Dictionary) -> void:
+	push_ticker(choice.ticker, true)
+	add_message(choice.message_sender, choice.message_preview)
 
 func set_workspace_collapsed(collapsed: bool) -> void:
 	if workspace_collapsed == collapsed:
