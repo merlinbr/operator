@@ -6,6 +6,7 @@ const ART_SIZE := Vector2(1672.0, 941.0)
 const WINDOW_UV_RECT := Rect2(0.555, 0.136, 0.219, 0.435)
 const GlintShader := preload("res://scenes/main/glints.gdshader")
 
+const GameStateScript := preload("res://autoload/game_state.gd")
 func _init() -> void:
 	# SceneTree children receive _ready after the base SceneTree is initialized.
 	call_deferred("_run_after_ready")
@@ -66,6 +67,16 @@ func _run() -> void:
 		"environment visual layers keep their rendering order")
 
 	var exterior_light: Control = environment.get_node("ExteriorLight")
+	var ambient_grade: ColorRect = exterior_light.get_node("AmbientGrade")
+	var expected_room_grade: Rect2 = environment._art_space_rect_for(
+		environment.size, environment.ROOM_FLASH_UV_RECT)
+	check(ambient_grade.get_index() == 0 and ambient_grade.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"ambient grade is the input-safe first exterior-light child")
+	check(ambient_grade.position.is_equal_approx(expected_room_grade.position)
+		and ambient_grade.size.is_equal_approx(expected_room_grade.size),
+		"ambient grade follows the existing room art rectangle")
+	check(not environment.get_children().has(ambient_grade),
+		"ambient grade is nested and preserves the four direct environment layers")
 	var cyan_spill: TextureRect = exterior_light.get_node("CyanSpill")
 	var magenta_spill: TextureRect = exterior_light.get_node("MagentaSpill")
 	check(exterior_light.mouse_filter == Control.MOUSE_FILTER_IGNORE
@@ -206,5 +217,54 @@ func _run() -> void:
 	check(environment.art_rect_for(Vector2.ZERO) == Rect2()
 		and environment.art_rect_for(Vector2(-1.0, -1.0)) == Rect2(),
 		"art rectangle is empty for zero or negative dimensions")
+
+	var gs := GameStateScript.new()
+	gs.name = "TimeState"
+	root.add_child(gs)
+	check(environment.time_band_for(179) == &"night"
+		and environment.time_band_for(180) == &"pre_dawn"
+		and environment.time_band_for(359) == &"pre_dawn"
+		and environment.time_band_for(360) == &"daylight"
+		and environment.time_band_for(1199) == &"daylight"
+		and environment.time_band_for(1200) == &"night",
+		"time bands classify every authored boundary")
+	check(environment.time_band_for(-1) == &"night"
+		and environment.time_band_for(1440) == &"night",
+		"time bands normalize minutes into one day")
+
+	environment.size = Vector2(1920.0, 1080.0)
+	environment.apply_environment_layout()
+	environment.setup(gs)
+	check(environment._time_band == &"night"
+		and background.modulate.is_equal_approx(Color.WHITE)
+		and is_equal_approx(window_rain.modulate.a, 1.0),
+		"initial GameState setup applies night targets immediately")
+	var same_band_tween: Variant = environment._atmosphere_tween
+	gs.minute_of_day = 60
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	check(environment._time_band == &"night" and environment._atmosphere_tween == same_band_tween,
+		"clock updates inside the active band do not restart atmosphere work")
+
+	environment._apply_time_band(&"pre_dawn", true)
+	check(environment._time_band == &"pre_dawn"
+		and background.modulate.is_equal_approx(Color(0.86, 0.91, 1.0, 1.0))
+		and is_equal_approx(window_rain.modulate.a, 0.72)
+		and is_equal_approx(environment._spill_multiplier, 0.65)
+		and is_equal_approx(ambient_grade.color.a, 0.12),
+		"pre-dawn immediate application uses all authored targets")
+	environment._apply_time_band(&"daylight", true)
+	check(environment._time_band == &"daylight"
+		and background.modulate.is_equal_approx(Color(0.94, 1.0, 1.0, 1.0))
+		and is_equal_approx(window_rain.modulate.a, 0.40)
+		and is_equal_approx(environment._spill_multiplier, 0.30)
+		and is_equal_approx(ambient_grade.color.a, 0.06),
+		"daylight immediate application uses all authored targets")
+	gs.minute_of_day = 1200
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	check(environment._time_band == &"night" and environment._atmosphere_tween != null,
+		"a band crossing starts the night crossfade")
+	if environment._atmosphere_tween != null:
+		environment._atmosphere_tween.kill()
+	gs.queue_free()
 
 	environment.queue_free()

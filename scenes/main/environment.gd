@@ -8,6 +8,31 @@ const ROOM_FLASH_UV_RECT := Rect2(0.16, 0.08, 0.72, 0.82)
 const MONITOR_GLINTS_UV_RECT := Rect2(0.075, 0.39, 0.17, 0.20)
 const NEON_GLINTS_UV_RECT := Rect2(0.70, 0.13, 0.12, 0.43)
 const KITCHEN_GLINTS_UV_RECT := Rect2(0.84, 0.30, 0.13, 0.11)
+
+const ATMOSPHERE_TRANSITION_SECONDS := 25.0
+const ATMOSPHERE_PROFILES := {
+	&"night": {
+		"background": Color(1.00, 1.00, 1.00, 1.00),
+		"rain_alpha": 1.00,
+		"spill_multiplier": 1.00,
+		"glint_alpha": 1.00,
+		"ambient": Color(0.00, 0.00, 0.00, 0.00),
+	},
+	&"pre_dawn": {
+		"background": Color(0.86, 0.91, 1.00, 1.00),
+		"rain_alpha": 0.72,
+		"spill_multiplier": 0.65,
+		"glint_alpha": 0.55,
+		"ambient": Color(0.03, 0.09, 0.17, 0.12),
+	},
+	&"daylight": {
+		"background": Color(0.94, 1.00, 1.00, 1.00),
+		"rain_alpha": 0.40,
+		"spill_multiplier": 0.30,
+		"glint_alpha": 0.25,
+		"ambient": Color(0.18, 0.27, 0.36, 0.06),
+	},
+}
 const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 
 const RainShader := preload("res://scenes/main/rain.gdshader")
@@ -28,6 +53,11 @@ var _lightning_timer: Timer
 var _flash_tween: Tween
 var _light_time := 0.0
 var _light_rng := RandomNumberGenerator.new()
+var _ambient_grade: ColorRect
+var _gs: Node
+var _atmosphere_tween: Tween
+var _time_band: StringName = &""
+var _spill_multiplier := 1.0
 
 const CYAN_PERIOD := 13.0
 const MAGENTA_PERIOD := 19.0
@@ -57,6 +87,11 @@ func _ready() -> void:
 	_exterior_light.name = "ExteriorLight"
 	_exterior_light.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_exterior_light.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ambient_grade = ColorRect.new()
+	_ambient_grade.name = "AmbientGrade"
+	_ambient_grade.color = Color(0.0, 0.0, 0.0, 0.0)
+	_ambient_grade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_exterior_light.add_child(_ambient_grade)
 	_cyan_spill = _make_spill("CyanSpill", Color("#39e6ff"), 0.11)
 	_magenta_spill = _make_spill("MagentaSpill", Color("#f25dff"), 0.09)
 	_monitor_glints = _make_glint("MonitorGlints", Color("#66e9ff"), 2.0)
@@ -99,11 +134,77 @@ func _ready() -> void:
 	# First layout: _ready may run before the parent assigns our final size.
 	await get_tree().process_frame
 	apply_environment_layout()
+	if _gs != null:
+		var initial_band := time_band_for(_gs.minute_of_day)
+		_time_band = &""
+		_apply_time_band(initial_band, true)
+
+func setup(gs: Node) -> void:
+	if _gs == gs:
+		return
+	if _gs != null and _gs.clock_changed.is_connected(_on_clock_changed):
+		_gs.clock_changed.disconnect(_on_clock_changed)
+	_gs = gs
+	if _gs == null:
+		return
+	_gs.clock_changed.connect(_on_clock_changed)
+	_apply_time_band(time_band_for(_gs.minute_of_day), true)
+
+func time_band_for(minute_of_day: int) -> StringName:
+	var minute := minute_of_day % 1440
+	if minute < 0:
+		minute += 1440
+	if minute < 180 or minute >= 1200:
+		return &"night"
+	if minute < 360:
+		return &"pre_dawn"
+	return &"daylight"
+
+func _on_clock_changed(_day: int, minute_of_day: int) -> void:
+	_apply_time_band(time_band_for(minute_of_day))
+
+func _apply_time_band(band: StringName, immediate: bool = false) -> void:
+	if band == _time_band:
+		return
+	var profile: Dictionary = ATMOSPHERE_PROFILES[band]
+	_time_band = band
+	if _atmosphere_tween != null:
+		_atmosphere_tween.kill()
+		_atmosphere_tween = null
+	if _background == null:
+		return
+	var rain_modulate := Color(1.0, 1.0, 1.0, float(profile.rain_alpha))
+	var glint_modulate := Color(1.0, 1.0, 1.0, float(profile.glint_alpha))
+	if immediate:
+		_background.modulate = profile.background
+		_window_rain.modulate = rain_modulate
+		_spill_multiplier = float(profile.spill_multiplier)
+		_monitor_glints.modulate = glint_modulate
+		_neon_glints.modulate = glint_modulate
+		_kitchen_glints.modulate = glint_modulate
+		_ambient_grade.color = profile.ambient
+		return
+	_atmosphere_tween = create_tween()
+	_atmosphere_tween.set_parallel()
+	_atmosphere_tween.tween_property(_background, "modulate", profile.background,
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(_window_rain, "modulate", rain_modulate,
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(self, "_spill_multiplier", float(profile.spill_multiplier),
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(_monitor_glints, "modulate", glint_modulate,
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(_neon_glints, "modulate", glint_modulate,
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(_kitchen_glints, "modulate", glint_modulate,
+		ATMOSPHERE_TRANSITION_SECONDS)
+	_atmosphere_tween.tween_property(_ambient_grade, "color", profile.ambient,
+		ATMOSPHERE_TRANSITION_SECONDS)
 
 func _process(delta: float) -> void:
 	_light_time += delta
-	_cyan_spill.modulate.a = 0.09 + 0.02 * sin(_light_time * TAU / CYAN_PERIOD)
-	_magenta_spill.modulate.a = 0.075 + 0.018 * sin(_light_time * TAU / MAGENTA_PERIOD + 1.4)
+	_cyan_spill.modulate.a = (0.09 + 0.02 * sin(_light_time * TAU / CYAN_PERIOD)) * _spill_multiplier
+	_magenta_spill.modulate.a = (0.075 + 0.018 * sin(_light_time * TAU / MAGENTA_PERIOD + 1.4)) * _spill_multiplier
 
 func _make_spill(spill_name: String, color: Color, center_alpha: float) -> TextureRect:
 	var spill := TextureRect.new()
@@ -220,6 +321,8 @@ func apply_environment_layout() -> void:
 	_magenta_spill.position = magenta_rect.position
 	_magenta_spill.size = magenta_rect.size
 	var room_flash_rect := _art_space_rect_for(size, ROOM_FLASH_UV_RECT)
+	_ambient_grade.position = room_flash_rect.position
+	_ambient_grade.size = room_flash_rect.size
 	_room_flash.position = room_flash_rect.position
 	_room_flash.size = room_flash_rect.size
 	_window_flash.position = window_rect.position
