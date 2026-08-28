@@ -23,7 +23,7 @@ See the design documents for the full vision:
 
 ## Getting started
 
-Open the project folder in the Godot editor and run — the main scene is `res://scenes/main/main.tscn`.
+Open the project folder in the Godot editor and run — `res://scenes/boot/boot.tscn` is the entry scene and routes to the operations workspace at `res://scenes/main/main.tscn`.
 
 From the command line:
 
@@ -39,7 +39,7 @@ Headless GDScript tests (no framework — a minimal `SceneTree` harness). Run on
 .\tests\run_test.ps1 test_game_state
 ```
 
-Test files: `test_smoke`, `test_game_state`, `test_module_registry`, `test_theme`, `test_placeholder_data`, `test_status_chip`, `test_icon_rail`, `test_ticker_bar`, `test_panels_basic`, `test_contracts`, `test_main`. Each prints `RESULT: ALL PASSED` on success.
+Test files: `test_smoke`, `test_boot`, `test_game_state`, `test_module_registry`, `test_theme`, `test_placeholder_data`, `test_status_chip`, `test_icon_rail`, `test_ticker_bar`, `test_panels_basic`, `test_contracts`, `test_main`. Each prints `RESULT: ALL PASSED` on success.
 
 ## Project structure
 
