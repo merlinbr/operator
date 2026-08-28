@@ -110,6 +110,39 @@ func _run() -> void:
 	check(primary.visible and primary.get_child(0).name == "ContractsPanel",
 		"ACKNOWLEDGE leaves Contract Network open")
 
+	var d207_row := _button(primary, "DATA RETRIEVAL   4,200 CR")
+	check(d207_row != null and not d207_row.disabled,
+		"C-1042 resolution enables D-207 in the refreshed network")
+	d207_row.pressed.emit()
+	check(_button(context, "ACCEPT") != null, "D-207 opens its offer detail")
+	_button(context, "ACCEPT").pressed.emit()
+	check(_button(context, "PROCEED TO TRANSIT EXCHANGE") != null,
+		"D-207 accept renders its destination action")
+	_button(context, "PROCEED TO TRANSIT EXCHANGE").pressed.emit()
+	check(_button(context, "ABORT RETRIEVAL") != null,
+		"D-207 proceed renders its authored interruption")
+	_button(context, "ABORT RETRIEVAL").pressed.emit()
+	check(_button(primary, "FAILED // DATA RETRIEVAL") != null,
+		"D-207 failure refreshes its terminal network row")
+	_button(context, "ACKNOWLEDGE").pressed.emit()
+
+	var r311_row := _button(primary, "CLINIC ASSET RECOVERY   3,200 CR")
+	check(r311_row != null and not r311_row.disabled,
+		"D-207 resolution enables R-311 despite failure")
+	r311_row.pressed.emit()
+	_button(context, "ACCEPT").pressed.emit()
+	check(_button(context, "PROCEED TO MEDICAL SUBLEVEL") != null,
+		"R-311 accepts and uses its destination action")
+	_button(context, "PROCEED TO MEDICAL SUBLEVEL").pressed.emit()
+	check(_button(context, "ABORT RECOVERY") != null,
+		"R-311 proceed renders its authored interruption")
+	_button(context, "ABORT RECOVERY").pressed.emit()
+	check(_button(primary, "FAILED // CLINIC ASSET RECOVERY") != null,
+		"R-311 resolution refreshes its terminal network row")
+	_button(context, "ACKNOWLEDGE").pressed.emit()
+	check(context.get_child_count() == 0 and primary.visible,
+		"final acknowledgement closes only detail and leaves the network open")
+
 	# context opens alongside primary (primary keeps its class width)
 	var primary_w: float = primary.size.x
 	main.open_context(load("res://scenes/modules/contracts/contract_detail.tscn").instantiate())
