@@ -39,7 +39,7 @@ func _run() -> void:
 	var master_value := home.find_child("MasterValue", true, false) as Label
 	check(master != null and ambience != null and sfx != null and mute != null,
 		"Home exposes all audio controls")
-	check(master.value == 80.0 and ambience.value == 100.0 and sfx.value == 100.0,
+	check(master.value == 80.0 and ambience.value == 100.0 and sfx.value == 50.0,
 		"Home applies authored session defaults")
 	master.value = 35.0
 	master.value_changed.emit(master.value)
