@@ -2,7 +2,7 @@
 
 A cyberpunk operations RPG — build a life and an organization as an independent operator in a dystopian corporate society.
 
-> **Status:** early prototype. The current build is the "operations terminal" shell (Slice 0) — a working, navigable UI over a layered living environment. No real gameplay systems yet.
+> **Status:** early prototype. The current build contains the navigable operations-terminal shell, a Tier 1 apartment environment, and a deterministic three-contract early-game portfolio. It has no persistent save, simulation, combat, or procedural content systems.
 
 ## About
 
@@ -12,7 +12,8 @@ This is a **UI-first** game: the interface is an in-world operations terminal, a
 
 See the design documents for the full vision:
 
-- [`context.md`](context.md) — project context and design pillars
+- [`docs/superpowers/specs/2026-08-26-first-contract-vertical-slice-design.md`](docs/superpowers/specs/2026-08-26-first-contract-vertical-slice-design.md) — first playable contract slice
+- [`docs/superpowers/specs/2026-08-28-early-contract-portfolio-design.md`](docs/superpowers/specs/2026-08-28-early-contract-portfolio-design.md) — three-contract early-game portfolio
 - [`docs/superpowers/specs/2026-08-24-terminal-shell-design.md`](docs/superpowers/specs/2026-08-24-terminal-shell-design.md) — Slice 0 design spec
 - [`docs/superpowers/plans/2026-08-24-terminal-shell.md`](docs/superpowers/plans/2026-08-24-terminal-shell.md) — Slice 0 implementation plan
 
@@ -55,7 +56,7 @@ res://
   tests/             headless tests + run_test.ps1
 ```
 
-Architecture notes: components receive `GameState` via `setup()` injection (never the autoload global); the icon rail renders from `module_registry.tres` (add a module = add a definition + a scene, no rail-script edits); placeholder game content lives only in `data/placeholder/`.
+Architecture notes: components receive `GameState` via `setup()` injection (never the autoload global); authored contract content lives in `data/contracts/contract_catalog.gd`, with mutable runtime state in `GameState`; the icon rail renders from `module_registry.tres` (add a module = add a definition + a scene, no rail-script edits).
 
 ## License
 
