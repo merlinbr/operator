@@ -73,6 +73,7 @@ func _build_shell() -> void:
 
 	var environment := EnvironmentScene.instantiate()
 	add_child(environment)
+	environment.setup(gs)
 
 	workspace = Control.new()
 	workspace.name = "Workspace"

@@ -30,6 +30,8 @@ func _run() -> void:
 	var workspace: Control = main.get_node("Workspace")
 	var environment: Control = main.get_node("EnvironmentLayer")
 	_environment = environment
+	check(environment._gs == gs and environment._time_band == &"night",
+		"Main injects GameState and Environment applies the initial night band")
 	check(main.get_children().find(environment) < main.get_children().find(workspace),
 		"environment renders before workspace UI")
 	var primary: Control = workspace.get_node("PrimaryHost")
@@ -42,6 +44,21 @@ func _run() -> void:
 	check(primary.visible, "home panel visible on start")
 	check(gs.active_module == &"home", "active module is home")
 	check(gs.module_open, "module starts open")
+	var initial_module: StringName = gs.active_module
+	var initial_open: bool = gs.module_open
+	gs.minute_of_day = 180
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	check(environment._time_band == &"pre_dawn"
+		and gs.active_module == initial_module and gs.module_open == initial_open
+		and primary.visible,
+		"clock updates change atmosphere without changing workspace state")
+	if environment._atmosphere_tween != null:
+		environment._atmosphere_tween.kill()
+	gs.minute_of_day = gs.START_MINUTE
+	gs.day = gs.START_DAY
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	if environment._atmosphere_tween != null:
+		environment._atmosphere_tween.kill()
 	var ws: Vector2 = workspace.size if workspace.size.x > 0 else Vector2(1920, 1080)
 	check(primary.size.x < ws.x * 0.5, "home width is compact")
 	check(primary.size.y < ws.y * 0.6, "home height is compact")
