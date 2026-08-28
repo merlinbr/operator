@@ -16,6 +16,9 @@ const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
 
 signal contracts_changed
 signal messages_changed
+signal contract_accepted(id: StringName)
+signal contract_proceeded(id: StringName)
+signal contract_resolved(id: StringName, status: StringName)
 
 var contracts: Array[Dictionary] = ContractCatalog.all()
 var active_contract_id: StringName = &""
@@ -120,6 +123,7 @@ func accept_contract(id: StringName) -> bool:
 	contracts_changed.emit()
 	push_ticker("CONTRACT ACCEPTED // " + contract.code, true)
 	add_message("MARA", contract.accept_message)
+	contract_accepted.emit(id)
 	return true
 
 func proceed_contract(id: StringName) -> bool:
@@ -134,6 +138,7 @@ func proceed_contract(id: StringName) -> bool:
 	contracts_changed.emit()
 	push_ticker(contract.complication.title, true)
 	add_message("MARA", contract.proceed_message)
+	contract_proceeded.emit(id)
 	return true
  
 
@@ -162,6 +167,7 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	active_contract_id = &""
 	contracts_changed.emit()
 	_push_resolution_feedback(choice)
+	contract_resolved.emit(id, contract.status)
 	return true
 
 func _unlock_contract(id: StringName) -> void:

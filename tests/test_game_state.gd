@@ -87,6 +87,13 @@ func _run() -> void:
 	check(contract_gs.active_contract_id == &"", "no active contract at start")
 	check(not contract_gs.proceed_contract(&"cold_chain_delivery"),
 		"cannot proceed before accepting")
+	var contract_events: Array[Dictionary] = []
+	contract_gs.contract_accepted.connect(func(id: StringName) -> void:
+		contract_events.append({"event": &"accepted", "id": id}))
+	contract_gs.contract_proceeded.connect(func(id: StringName) -> void:
+		contract_events.append({"event": &"proceeded", "id": id}))
+	contract_gs.contract_resolved.connect(func(id: StringName, status: StringName) -> void:
+		contract_events.append({"event": &"resolved", "id": id, "status": status}))
 	check(contract_gs.accept_contract(&"cold_chain_delivery"), "accepting C-1042 succeeds")
 	check(contract_gs.active_contract_id == &"cold_chain_delivery", "accepted contract becomes active")
 	check(contract_gs.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
@@ -96,23 +103,41 @@ func _run() -> void:
 		"proceed advances exactly 80 minutes across midnight")
 	check(contract_gs.get_contract(&"cold_chain_delivery").phase == &"customs_hold",
 		"proceed exposes the Customs hold")
+	check(contract_events == [
+		{"event": &"accepted", "id": &"cold_chain_delivery"},
+		{"event": &"proceeded", "id": &"cold_chain_delivery"},
+	], "accepted transitions emit ordered semantic events once")
 	contract_gs.free()
 	var invalid_gs := GameStateScript.new()
 	check(invalid_gs.accept_contract(&"cold_chain_delivery"), "invalid setup accepts")
+	var invalid_event_count := [0]
+	invalid_gs.contract_accepted.connect(func(_id: StringName) -> void:
+		invalid_event_count[0] += 1)
+	invalid_gs.contract_proceeded.connect(func(_id: StringName) -> void:
+		invalid_event_count[0] += 1)
+	invalid_gs.contract_resolved.connect(func(_id: StringName, _status: StringName) -> void:
+		invalid_event_count[0] += 1)
 	var invalid_active_id := invalid_gs.active_contract_id
 	check(not invalid_gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"),
 		"cannot resolve before Customs")
 	check(invalid_gs.active_contract_id == invalid_active_id and
 		invalid_gs.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
 		"invalid resolution leaves active contract unchanged")
+	check(invalid_event_count[0] == 0, "rejected resolution emits no semantic events")
 	invalid_gs.free()
 
 	var fee_gs: Variant = _at_customs()
+	var resolution_events: Array[Dictionary] = []
+	fee_gs.contract_resolved.connect(func(id: StringName, status: StringName) -> void:
+		resolution_events.append({"event": &"resolved", "id": id, "status": status}))
 	check(fee_gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"), "fee resolves")
 	check(fee_gs.credits == fee_gs.START_CREDITS + 1150, "fee awards net 1,150 CR")
 	check(fee_gs.heat == 2, "fee preserves Heat")
 	check(fee_gs.active_contract_id == &"", "fee clears active contract")
 	check(fee_gs.get_contract(&"cold_chain_delivery").status == &"completed", "fee completes contract")
+	check(resolution_events == [{
+		"event": &"resolved", "id": &"cold_chain_delivery", "status": &"completed"
+	}], "completed resolution emits its semantic event once")
 	fee_gs.free()
 
 	var mara_gs: Variant = _at_customs()
@@ -132,11 +157,17 @@ func _run() -> void:
 	bypass_gs.free()
 
 	var abort_gs: Variant = _at_customs()
+	var abort_resolution_events: Array[Dictionary] = []
+	abort_gs.contract_resolved.connect(func(id: StringName, status: StringName) -> void:
+		abort_resolution_events.append({"event": &"resolved", "id": id, "status": status}))
 	check(abort_gs.resolve_contract(&"cold_chain_delivery", &"abort"), "abort resolves")
 	check(abort_gs.credits == abort_gs.START_CREDITS and abort_gs.heat == 2,
 		"abort changes neither Credits nor Heat")
 	check(abort_gs.active_contract_id == &"", "abort clears active contract")
 	check(abort_gs.get_contract(&"cold_chain_delivery").status == &"failed", "abort fails contract")
+	check(abort_resolution_events == [{
+		"event": &"resolved", "id": &"cold_chain_delivery", "status": &"failed"
+	}], "failed resolution emits its semantic event once")
 	abort_gs.free()
 
 	var locked_gs := GameStateScript.new()
