@@ -17,8 +17,8 @@ func _run() -> void:
 		and boot_sfx.stream != null
 		and boot_sfx.stream.resource_path == "res://assets/audio/ui/terminal_enter.ogg",
 		"boot owns the terminal-entry SFX player")
-	check(is_equal_approx(boot_sfx.volume_db, linear_to_db(0.5)),
-		"boot SFX uses half gain")
+	check(is_equal_approx(boot_sfx.volume_db, linear_to_db(0.25)),
+		"boot SFX uses quarter gain after second reduction")
 	_suppress_routing(boot)
 
 	var title: Label = boot.get_node("Center/BootPanel/Content/Title")

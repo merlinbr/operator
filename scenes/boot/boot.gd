@@ -103,7 +103,7 @@ func _build_children() -> void:
 	var boot_sfx := AudioStreamPlayer.new()
 	boot_sfx.name = "BootSfx"
 	boot_sfx.bus = &"SFX"
-	boot_sfx.volume_db = linear_to_db(0.5)
+	boot_sfx.volume_db = linear_to_db(0.25)
 	boot_sfx.stream = _load_stream(ENTRY_SFX_PATH)
 	_boot_sfx = boot_sfx
 	add_child(boot_sfx)

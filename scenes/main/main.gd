@@ -92,7 +92,7 @@ func _build_shell() -> void:
 	var contract_sfx := AudioStreamPlayer.new()
 	contract_sfx.name = "ContractSfx"
 	contract_sfx.bus = &"SFX"
-	contract_sfx.volume_db = linear_to_db(0.5)
+	contract_sfx.volume_db = linear_to_db(0.25)
 	_contract_sfx = contract_sfx
 	add_child(contract_sfx)
 

@@ -39,8 +39,8 @@ func _run() -> void:
 		"Main owns the ambience player")
 	check(contract_sfx != null and contract_sfx.bus == &"SFX",
 		"Main owns the contract SFX player")
-	check(is_equal_approx(contract_sfx.volume_db, linear_to_db(0.5)),
-		"contract SFX uses half gain")
+	check(is_equal_approx(contract_sfx.volume_db, linear_to_db(0.25)),
+		"contract SFX uses quarter gain after second reduction")
 	check(environment._gs == gs and environment._time_band == &"night",
 		"Main injects GameState and Environment applies the initial night band")
 	check(main.get_children().find(environment) < main.get_children().find(workspace),
