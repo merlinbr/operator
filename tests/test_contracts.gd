@@ -157,6 +157,43 @@ func _run() -> void:
 	detail.setup(gs, {})
 	check(detail.find_children("*", "Button", true, false).is_empty(),
 		"empty setup clears prior actions synchronously")
+	var portfolio_gs := GameStateScript.new()
+	check(portfolio_gs.accept_contract(&"cold_chain_delivery"), "portfolio setup accepts C-1042")
+	check(portfolio_gs.proceed_contract(&"cold_chain_delivery"), "portfolio setup proceeds C-1042")
+	check(portfolio_gs.resolve_contract(&"cold_chain_delivery", &"bypass"), "portfolio setup bypasses C-1042")
+	check(portfolio_gs.accept_contract(&"data_retrieval"), "portfolio setup accepts D-207")
+	var data_ready := portfolio_gs.get_contract(&"data_retrieval")
+	detail.setup(portfolio_gs, data_ready)
+	check(_button(detail, "PROCEED TO TRANSIT EXCHANGE") != null,
+		"D-207 uses its authored proceed label")
+	check(_button(detail, "PROCEED TO DOCK 17") == null,
+		"D-207 does not use C-1042's hard-coded proceed label")
+	check(portfolio_gs.proceed_contract(&"data_retrieval"), "portfolio setup proceeds D-207")
+	var high_heat_data := portfolio_gs.get_contract(&"data_retrieval")
+	detail.setup(portfolio_gs, high_heat_data)
+	check(_button(detail, "USE ROUTED VENDOR ID // 650 CR") != null,
+		"high-Heat D-207 renders routed vendor ID")
+	check(_button(detail, "SPOOF SERVICE CREDENTIALS") == null,
+		"high-Heat D-207 hides spoof credentials")
+
+	var favor_gs := GameStateScript.new()
+	check(favor_gs.accept_contract(&"cold_chain_delivery"), "favor setup accepts C-1042")
+	check(favor_gs.proceed_contract(&"cold_chain_delivery"), "favor setup proceeds C-1042")
+	check(favor_gs.resolve_contract(&"cold_chain_delivery", &"call_mara"), "favor setup calls Mara")
+	check(favor_gs.accept_contract(&"data_retrieval"), "favor setup accepts D-207")
+	check(favor_gs.proceed_contract(&"data_retrieval"), "favor setup proceeds D-207")
+	check(favor_gs.resolve_contract(&"data_retrieval", &"buy_token"), "favor setup resolves D-207")
+	check(favor_gs.accept_contract(&"clinic_asset_recovery"), "favor setup accepts R-311")
+	var recovery_ready := favor_gs.get_contract(&"clinic_asset_recovery")
+	detail.setup(favor_gs, recovery_ready)
+	check(_button(detail, "PROCEED TO MEDICAL SUBLEVEL") != null,
+		"R-311 uses its authored proceed label")
+	check(favor_gs.proceed_contract(&"clinic_asset_recovery"), "favor setup proceeds R-311")
+	detail.setup(favor_gs, favor_gs.get_contract(&"clinic_asset_recovery"))
+	check(_button(detail, "SETTLE MARA'S FAVOR // HAND DELIVERY") != null,
+		"favor-owed R-311 renders the settlement action")
+	portfolio_gs.free()
+	favor_gs.free()
 	detail.queue_free()
 
 	panel.queue_free()

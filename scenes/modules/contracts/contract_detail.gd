@@ -100,7 +100,8 @@ func _render_ready(c: Dictionary) -> void:
 		],
 		"STATUS      CARGO IN TRANSIT",
 	])
-	_add_action("PROCEED TO DOCK 17", func() -> void: proceed_requested.emit(_contract_id))
+	_add_action("PROCEED TO " + c.proceed_label,
+		func() -> void: proceed_requested.emit(_contract_id))
 	_add_action("CLOSE", func() -> void: close_requested.emit())
 
 func _choice(c: Dictionary, choice_id: StringName) -> Dictionary:
