@@ -3,6 +3,7 @@ extends Control
 signal enter_requested
 
 const MainScene := preload("res://scenes/main/main.tscn")
+const ENTRY_SFX_PATH := "res://assets/audio/ui/terminal_enter.ogg"
 const REVEAL_SECONDS := 0.9
 const FADE_SECONDS := 0.2
 const DIAGNOSTICS := [
@@ -16,6 +17,7 @@ const DIAGNOSTICS := [
 var _panel: PanelContainer
 var _diagnostics: Array[Label] = []
 var _timer: Timer
+var _boot_sfx: AudioStreamPlayer
 var _entering := false
 var _revealed := 0
 var _fade_tween: Tween
@@ -98,6 +100,18 @@ func _build_children() -> void:
 	_timer.wait_time = REVEAL_SECONDS
 	_timer.timeout.connect(_reveal_next_line)
 	add_child(_timer)
+	var boot_sfx := AudioStreamPlayer.new()
+	boot_sfx.name = "BootSfx"
+	boot_sfx.bus = &"SFX"
+	boot_sfx.stream = _load_stream(ENTRY_SFX_PATH)
+	_boot_sfx = boot_sfx
+	add_child(boot_sfx)
+
+func _load_stream(path: String) -> AudioStream:
+	var stream := load(path) as AudioStream
+	if stream == null:
+		push_error("Audio stream unavailable: " + path)
+	return stream
 
 func _reveal_next_line() -> void:
 	if _revealed >= _diagnostics.size():
@@ -112,6 +126,8 @@ func _enter_operations() -> void:
 	if _entering:
 		return
 	_entering = true
+	if _boot_sfx.stream != null:
+		_boot_sfx.play()
 	_timer.stop()
 	for line in _diagnostics:
 		line.visible = true

@@ -12,6 +12,9 @@ func _init() -> void:
 	call_deferred("_finish_after_ready")
 
 func _finish_after_ready() -> void:
+	var ambience := _main.get_node_or_null("Ambience") as AudioStreamPlayer
+	check(ambience != null and ambience.bus == &"Ambience" and ambience.playing,
+		"Main owns one playing ambience loop")
 	check(_environment.get_child_count() == 4, "environment has four visual layers")
 	_main.queue_free()
 	_gs.queue_free()
@@ -30,6 +33,12 @@ func _run() -> void:
 	var workspace: Control = main.get_node("Workspace")
 	var environment: Control = main.get_node("EnvironmentLayer")
 	_environment = environment
+	var ambience := main.get_node_or_null("Ambience") as AudioStreamPlayer
+	var contract_sfx := main.get_node_or_null("ContractSfx") as AudioStreamPlayer
+	check(ambience != null and ambience.bus == &"Ambience",
+		"Main owns the ambience player")
+	check(contract_sfx != null and contract_sfx.bus == &"SFX",
+		"Main owns the contract SFX player")
 	check(environment._gs == gs and environment._time_band == &"night",
 		"Main injects GameState and Environment applies the initial night band")
 	check(main.get_children().find(environment) < main.get_children().find(workspace),
@@ -111,13 +120,57 @@ func _run() -> void:
 	# a fresh selection drives the accepted, proceeded, and aborted paths
 	_button(primary, "COLD-CHAIN DELIVERY   1,400 CR").pressed.emit()
 	_button(context, "ACCEPT").pressed.emit()
+	check(contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_accepted.ogg",
+		"accept maps to its SFX")
+	contract_sfx.stop()
+	gs.contracts_changed.emit()
+	check(not contract_sfx.playing
+		and contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_accepted.ogg",
+		"accept cue is not replayed by refresh")
 	check(_button(context, "PROCEED TO DOCK 17") != null,
 		"ACCEPT refreshes detail to proceed")
 	_button(context, "PROCEED TO DOCK 17").pressed.emit()
+	check(contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_proceeded.ogg",
+		"proceed maps to its SFX")
+	contract_sfx.stop()
+	gs.contracts_changed.emit()
+	check(not contract_sfx.playing
+		and contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_proceeded.ogg",
+		"proceed cue is not replayed by refresh")
 	check(gs.day == 15, "PROCEED advances to day 15")
 	check(_button(context, "ABORT DELIVERY") != null,
 		"PROCEED refreshes detail to customs choices")
 	_button(context, "ABORT DELIVERY").pressed.emit()
+	check(contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_failed.ogg",
+		"failed resolution maps to its SFX")
+	contract_sfx.stop()
+	gs.contracts_changed.emit()
+	check(not contract_sfx.playing
+		and contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_failed.ogg",
+		"failed cue is not replayed by refresh")
+	var completed_root := Node.new()
+	root.add_child(completed_root)
+	var completed_gs := GameStateScript.new()
+	completed_gs.name = "GameState"
+	completed_root.add_child(completed_gs)
+	var completed_main := MainScene.instantiate()
+	completed_root.add_child(completed_main)
+	var completed_sfx := completed_main.get_node("ContractSfx") as AudioStreamPlayer
+	var completed_primary: Control = completed_main.get_node("Workspace/PrimaryHost")
+	var completed_context: Control = completed_main.get_node("Workspace/ContextHost")
+	completed_main.select_module(&"contracts")
+	_button(completed_primary, "COLD-CHAIN DELIVERY   1,400 CR").pressed.emit()
+	_button(completed_context, "ACCEPT").pressed.emit()
+	_button(completed_context, "PROCEED TO DOCK 17").pressed.emit()
+	_button(completed_context, "PAY CLEARANCE FEE // 250 CR").pressed.emit()
+	check(completed_sfx.stream.resource_path == "res://assets/audio/ui/contract_completed.ogg",
+		"completed resolution maps to its SFX")
+	completed_sfx.stop()
+	completed_gs.contracts_changed.emit()
+	check(not completed_sfx.playing
+		and completed_sfx.stream.resource_path == "res://assets/audio/ui/contract_completed.ogg",
+		"completed cue is not replayed by refresh")
+	completed_root.queue_free()
 	var failed_row := _button(primary, "FAILED // COLD-CHAIN DELIVERY")
 	check(failed_row != null and failed_row.disabled, "ABORT disables the failed C-1042 row")
 	check(_button(context, "ACKNOWLEDGE") != null, "failed detail shows ACKNOWLEDGE")

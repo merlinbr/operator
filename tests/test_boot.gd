@@ -12,6 +12,11 @@ func _run_after_ready() -> void:
 func _run() -> void:
 	var boot: Control = BootScene.instantiate()
 	root.add_child(boot)
+	var boot_sfx := boot.get_node_or_null("BootSfx") as AudioStreamPlayer
+	check(boot_sfx != null and boot_sfx.bus == &"SFX"
+		and boot_sfx.stream != null
+		and boot_sfx.stream.resource_path == "res://assets/audio/ui/terminal_enter.ogg",
+		"boot owns the terminal-entry SFX player")
 	_suppress_routing(boot)
 
 	var title: Label = boot.get_node("Center/BootPanel/Content/Title")
@@ -51,6 +56,7 @@ func _run() -> void:
 	boot._enter_operations()
 	check(boot._entering and timer.is_stopped() and enter_count[0] == 1,
 		"entry marks the boot as entering, stops timer, and emits once")
+	check(boot_sfx.playing, "accepted boot entry starts its cue")
 	for line in diagnostics.get_children():
 		check((line as Label).visible, "entry reveals every remaining diagnostic")
 	boot._enter_operations()

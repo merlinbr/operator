@@ -4,7 +4,11 @@ extends Control
 ## of truth for collapse state.
 
 const GameStateScript := preload("res://autoload/game_state.gd")
-
+const AMBIENCE_PATH := "res://assets/audio/ambience/lower_vesper_apartment.ogg"
+const CONTRACT_ACCEPTED_SFX_PATH := "res://assets/audio/ui/contract_accepted.ogg"
+const CONTRACT_PROCEEDED_SFX_PATH := "res://assets/audio/ui/contract_proceeded.ogg"
+const CONTRACT_COMPLETED_SFX_PATH := "res://assets/audio/ui/contract_completed.ogg"
+const CONTRACT_FAILED_SFX_PATH := "res://assets/audio/ui/contract_failed.ogg"
 const MODULE_SCENES := {
 	&"home": preload("res://scenes/modules/home/home_panel.tscn"),
 	&"comms": preload("res://scenes/modules/comms/comms_panel.tscn"),
@@ -41,18 +45,22 @@ var icon_rail: Control
 var primary_host: Control
 var context_host: Control
 var ticker: Control
+var _ambience: AudioStreamPlayer
+var _contract_sfx: AudioStreamPlayer
+var _missing_audio_paths := {}
 
 var _built := false
 var _selected_contract_id: StringName = &""
 
 func _ready() -> void:
 	_build_shell()
+	if _ambience != null and _ambience.stream != null:
+		_ambience.play()
 	if ticker != null:
 		ticker.start_rotation()
 	if is_inside_tree():
 		await get_tree().process_frame
 		_apply_layout()
-
 ## The headless test harness adds nodes to a root that is not yet inside the
 ## tree, so _enter_tree/_ready never fire there. NOTIFICATION_PARENTED does
 ## fire, and by then get_parent() is the root (with the GameState sibling), so
@@ -74,6 +82,18 @@ func _build_shell() -> void:
 	var environment := EnvironmentScene.instantiate()
 	add_child(environment)
 	environment.setup(gs)
+	var ambience := AudioStreamPlayer.new()
+	ambience.name = "Ambience"
+	ambience.bus = &"Ambience"
+	ambience.volume_db = -18.0
+	ambience.stream = _load_audio_stream(AMBIENCE_PATH)
+	_ambience = ambience
+	add_child(ambience)
+	var contract_sfx := AudioStreamPlayer.new()
+	contract_sfx.name = "ContractSfx"
+	contract_sfx.bus = &"SFX"
+	_contract_sfx = contract_sfx
+	add_child(contract_sfx)
 
 	workspace = Control.new()
 	workspace.name = "Workspace"
@@ -85,12 +105,16 @@ func _build_shell() -> void:
 	_build_rail()
 	_build_panel_hosts()
 	_build_ticker()
-
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
 	gs.contracts_changed.connect(_on_contracts_changed)
+	gs.contract_accepted.connect(_on_contract_accepted)
+	gs.contract_proceeded.connect(_on_contract_proceeded)
+	gs.contract_resolved.connect(_on_contract_resolved)
 	gs.active_module_changed.connect(func(_id: StringName) -> void: _apply_visibility())
 	gs.module_open_changed.connect(func(_open: bool) -> void: _apply_visibility())
 	gs.ticker_message.connect(func(text: String, highlight: bool) -> void: ticker.push_message(text, highlight))
+
+
 	icon_rail.module_selected.connect(select_module)
 	status_chip.collapse_requested.connect(gs.toggle_workspace)
 
@@ -221,6 +245,32 @@ func _on_contract_proceed(id: StringName) -> void:
 
 func _on_contract_resolution(id: StringName, choice_id: StringName) -> void:
 	gs.resolve_contract(id, choice_id)
+func _load_audio_stream(path: String) -> AudioStream:
+	var stream := load(path) as AudioStream
+	if stream == null and not _missing_audio_paths.has(path):
+		_missing_audio_paths[path] = true
+		push_error("Audio stream unavailable: " + path)
+	return stream
+
+func _play_contract_sfx(path: String) -> void:
+	var stream := _load_audio_stream(path)
+	if stream == null:
+		return
+	_contract_sfx.stream = stream
+	_contract_sfx.play()
+
+func _on_contract_accepted(_id: StringName) -> void:
+	_play_contract_sfx(CONTRACT_ACCEPTED_SFX_PATH)
+
+func _on_contract_proceeded(_id: StringName) -> void:
+	_play_contract_sfx(CONTRACT_PROCEEDED_SFX_PATH)
+
+func _on_contract_resolved(_id: StringName, status: StringName) -> void:
+	if status == &"completed":
+		_play_contract_sfx(CONTRACT_COMPLETED_SFX_PATH)
+	elif status == &"failed":
+		_play_contract_sfx(CONTRACT_FAILED_SFX_PATH)
+
 
 func _on_contracts_changed() -> void:
 	if gs.active_module != &"contracts" or not gs.module_open:
