@@ -154,6 +154,3 @@ func _on_unhandled_input(event: InputEvent) -> void:
 		if is_inside_tree():
 			get_viewport().set_input_as_handled()
 
-func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		_enter_operations()

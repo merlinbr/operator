@@ -91,6 +91,19 @@ func _run() -> void:
 		"ui_accept routes through entry")
 	action_boot.queue_free()
 
+	var click_boot: Control = BootScene.instantiate()
+	root.add_child(click_boot)
+	_suppress_routing(click_boot)
+	var click_count := [0]
+	click_boot.enter_requested.connect(func() -> void: click_count[0] += 1)
+	check(not click_boot.has_method("_gui_input"),
+		"background clicks do not bypass the explicit entry button")
+	var click_enter := click_boot.get_node("Center/BootPanel/Content/EnterOperations") as Button
+	click_enter.pressed.emit()
+	check(click_boot._entering and click_count[0] == 1,
+		"explicit Enter Operations button routes through entry")
+	click_boot.queue_free()
+
 func _suppress_routing(boot: Control) -> void:
 	if boot.enter_requested.is_connected(boot._on_enter_requested):
 		boot.enter_requested.disconnect(boot._on_enter_requested)
