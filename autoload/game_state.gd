@@ -12,7 +12,13 @@ signal workspace_collapsed_changed(collapsed: bool)
 signal active_module_changed(id: StringName)
 signal module_open_changed(open: bool)
 signal ticker_message(text: String, highlight: bool)
+signal residence_changed(id: StringName)
+signal rent_changed(status: StringName, amount: int, next_due_day: int)
 const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
+const ResidenceCatalog := preload("res://data/housing/residence_catalog.gd")
+const PROFILE_PATH := "user://operator_save.json"
+const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
+const PROFILE_VERSION := 1
 
 signal contracts_changed
 signal messages_changed
@@ -20,14 +26,16 @@ signal contract_accepted(id: StringName)
 signal contract_proceeded(id: StringName)
 signal contract_resolved(id: StringName, status: StringName)
 
-var contracts: Array[Dictionary] = ContractCatalog.all()
-var active_contract_id: StringName = &""
-var mara_favor_owed := false
-var messages: Array[Dictionary] = [
+const DEFAULT_MESSAGES: Array[Dictionary] = [
 	{"id": &"msg_mara_crate", "sender": "MARA", "preview": "Vesper has a cold-chain run. Start there.", "unread": true},
 	{"id": &"msg_system_sweep", "sender": "SYSTEM", "preview": "corp sweep expected in Sector 9 tonight", "unread": true},
 	{"id": &"msg_vasquez_docks", "sender": "VASQUEZ", "preview": "docks shift change is at 04:00, not 03:00", "unread": false},
 ]
+
+var contracts: Array[Dictionary] = ContractCatalog.all()
+var active_contract_id: StringName = &""
+var mara_favor_owed := false
+var messages: Array[Dictionary] = DEFAULT_MESSAGES.duplicate(true)
 
 const START_CREDITS := 12480
 const START_DISTRICT := "LOWER VESPER"
@@ -55,6 +63,291 @@ var alerts: int = 2:
 var workspace_collapsed := false
 var active_module: StringName = &""
 var module_open := false
+var current_residence_id: StringName = &"lower_vesper_studio"
+var owned_residence_ids: Array[StringName] = []
+var next_rent_due_day := 30
+var rent_due_amount := 0
+var rent_status: StringName = &"current"
+
+
+func _ready() -> void:
+	load_profile()
+
+func reset_profile() -> void:
+	var old_residence := current_residence_id
+	var old_rent_status := rent_status
+	var old_rent_amount := rent_due_amount
+	var old_next_rent_due_day := next_rent_due_day
+	contracts = ContractCatalog.all()
+	active_contract_id = &""
+	mara_favor_owed = false
+	messages = DEFAULT_MESSAGES.duplicate(true)
+	credits = START_CREDITS
+	district = START_DISTRICT
+	day = START_DAY
+	minute_of_day = START_MINUTE
+	heat = 2
+	alerts = 2
+	workspace_collapsed = false
+	active_module = &""
+	module_open = false
+	current_residence_id = &"lower_vesper_studio"
+	owned_residence_ids = []
+	next_rent_due_day = 30
+	rent_due_amount = 0
+	rent_status = &"current"
+	if FileAccess.file_exists(PROFILE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(PROFILE_PATH))
+	_emit_housing_changes(old_residence, old_rent_status, old_rent_amount, old_next_rent_due_day)
+
+func save_profile() -> bool:
+	var file := FileAccess.open(PROFILE_TEMP_PATH, FileAccess.WRITE)
+	if file == null:
+		push_error("Unable to write operator profile temporary file.")
+		return false
+	file.store_string(JSON.stringify(_profile_payload()))
+	var write_error := file.get_error()
+	file.close()
+	if write_error != OK:
+		push_error("Unable to finish writing operator profile.")
+		return false
+	var profile_path := ProjectSettings.globalize_path(PROFILE_PATH)
+	var temporary_path := ProjectSettings.globalize_path(PROFILE_TEMP_PATH)
+	if FileAccess.file_exists(PROFILE_PATH):
+		var remove_error := DirAccess.remove_absolute(profile_path)
+		if remove_error != OK:
+			push_error("Unable to replace operator profile.")
+			return false
+	var rename_error := DirAccess.rename_absolute(temporary_path, profile_path)
+	if rename_error != OK:
+		push_error("Unable to replace operator profile.")
+		return false
+	return true
+
+func load_profile() -> bool:
+	if not FileAccess.file_exists(PROFILE_PATH):
+		reset_profile()
+		return false
+	var file := FileAccess.open(PROFILE_PATH, FileAccess.READ)
+	if file == null:
+		return _reject_profile("profile cannot be read")
+	var text := file.get_as_text()
+	var read_error := file.get_error()
+	file.close()
+	if read_error != OK:
+		return _reject_profile("profile cannot be read")
+	var parser := JSON.new()
+	var parse_error := parser.parse(text)
+	if parse_error != OK:
+		return _reject_profile("profile JSON is malformed")
+	var parsed: Variant = parser.data
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return _reject_profile("profile JSON is malformed")
+	var reason := _validate_profile(parsed)
+	if not reason.is_empty():
+		return _reject_profile(reason)
+	_apply_profile(parsed)
+	return true
+
+func _reject_profile(reason: String) -> bool:
+	push_error("Unable to load operator profile: %s. Starting clean." % reason)
+	reset_profile()
+	return false
+
+func _profile_payload() -> Dictionary:
+	return {
+		"version": PROFILE_VERSION,
+		"credits": credits,
+		"district": district,
+		"day": day,
+		"minute_of_day": minute_of_day,
+		"heat": heat,
+		"alerts": alerts,
+		"workspace_collapsed": workspace_collapsed,
+		"active_module": active_module,
+		"module_open": module_open,
+		"active_contract_id": active_contract_id,
+		"contracts": contracts.duplicate(true),
+		"mara_favor_owed": mara_favor_owed,
+		"messages": messages.duplicate(true),
+		"current_residence_id": current_residence_id,
+		"owned_residence_ids": owned_residence_ids,
+		"next_rent_due_day": next_rent_due_day,
+		"rent_due_amount": rent_due_amount,
+		"rent_status": rent_status,
+	}
+
+func _validate_profile(data: Dictionary) -> String:
+	for key in _profile_payload().keys():
+		if not data.has(key):
+			return "profile is missing '%s'" % key
+	if not _is_int_value(data.version) or int(data.version) != PROFILE_VERSION:
+		return "profile version is incompatible"
+	if not _is_int_value(data.credits) or data.credits < 0:
+		return "profile Credits are invalid"
+	if not _is_string_value(data.district):
+		return "profile district is invalid"
+	if not _is_int_value(data.day) or data.day < 1:
+		return "profile day is invalid"
+	if not _is_int_value(data.minute_of_day) or data.minute_of_day < 0 or data.minute_of_day >= 1440:
+		return "profile clock is invalid"
+	if not _is_int_value(data.heat) or data.heat < 0:
+		return "profile Heat is invalid"
+	if not _is_int_value(data.alerts) or data.alerts < 0:
+		return "profile alerts are invalid"
+	if typeof(data.workspace_collapsed) != TYPE_BOOL or typeof(data.module_open) != TYPE_BOOL:
+		return "profile workspace state is invalid"
+	if not _is_string_value(data.active_module) or not _is_string_value(data.active_contract_id):
+		return "profile active state is invalid"
+	if typeof(data.mara_favor_owed) != TYPE_BOOL:
+		return "profile favor state is invalid"
+	var contract_reason := _validate_contracts(data.contracts, StringName(str(data.active_contract_id)))
+	if not contract_reason.is_empty():
+		return contract_reason
+	if typeof(data.messages) != TYPE_ARRAY:
+		return "profile messages are invalid"
+	for message: Variant in data.messages:
+		if typeof(message) != TYPE_DICTIONARY or not _is_string_value(message.get("id", null)) \
+				or typeof(message.get("sender", null)) != TYPE_STRING \
+				or typeof(message.get("preview", null)) != TYPE_STRING \
+				or typeof(message.get("unread", null)) != TYPE_BOOL:
+			return "profile message records are invalid"
+	if not _validate_housing(data):
+		return "profile housing state is invalid"
+	return ""
+
+func _validate_contracts(raw_contracts: Variant, active_id: StringName) -> String:
+	if typeof(raw_contracts) != TYPE_ARRAY:
+		return "profile contracts are invalid"
+	var authored := ContractCatalog.all()
+	if raw_contracts.size() != authored.size():
+		return "profile contract records are incompatible"
+	var active_count := 0
+	for index in authored.size():
+		var record: Variant = raw_contracts[index]
+		if typeof(record) != TYPE_DICTIONARY:
+			return "profile contract records are invalid"
+		if not _is_string_value(record.get("id", null)) \
+				or StringName(str(record.id)) != authored[index].id:
+			return "profile contract IDs are invalid"
+		if typeof(record.get("is_playable", null)) != TYPE_BOOL:
+			return "profile contract unlocks are invalid"
+		if not _is_string_value(record.get("status", null)) \
+				or not [&"available", &"active", &"completed", &"failed"].has(StringName(str(record.status))):
+			return "profile contract status is invalid"
+		if not _is_string_value(record.get("phase", null)) \
+				or not [&"offer", &"ready_to_proceed", &"customs_hold", &"resolved"].has(StringName(str(record.phase))):
+			return "profile contract phase is invalid"
+		if not _is_string_value(record.get("resolution_id", null)):
+			return "profile contract resolution is invalid"
+		var status := StringName(str(record.status))
+		var phase := StringName(str(record.phase))
+		if status == &"active":
+			active_count += 1
+			if phase != &"ready_to_proceed" and phase != &"customs_hold":
+				return "profile active contract state is invalid"
+			if record.resolution_id != &"":
+				return "profile active contract state is invalid"
+		elif status == &"available":
+			if phase != &"offer" or record.resolution_id != &"":
+				return "profile contract state is invalid"
+		elif (status == &"completed" or status == &"failed"):
+			if phase != &"resolved" or record.resolution_id == &"":
+				return "profile terminal contract state is invalid"
+	if active_count > 1 or (active_count == 0 and active_id != &"") or (active_count == 1 and active_id == &""):
+		return "profile active contract state is invalid"
+	if active_id != &"" and not authored.any(func(contract: Dictionary) -> bool: return contract.id == active_id):
+		return "profile active contract ID is invalid"
+	return ""
+
+func _validate_housing(data: Dictionary) -> bool:
+	if not _is_string_value(data.current_residence_id):
+		return false
+	var current := StringName(str(data.current_residence_id))
+	if _residence(current).is_empty():
+		return false
+	if typeof(data.owned_residence_ids) != TYPE_ARRAY:
+		return false
+	var owned: Array[StringName] = []
+	for raw_id: Variant in data.owned_residence_ids:
+		if not _is_string_value(raw_id):
+			return false
+		var id := StringName(str(raw_id))
+		if id != &"lower_vesper_studio" or owned.has(id):
+			return false
+		owned.append(id)
+	if not _is_int_value(data.next_rent_due_day) or data.next_rent_due_day < 1:
+		return false
+	if not _is_int_value(data.rent_due_amount) or data.rent_due_amount < 0:
+		return false
+	if not _is_string_value(data.rent_status):
+		return false
+	var status := StringName(str(data.rent_status))
+	if not [&"current", &"due", &"overdue"].has(status):
+		return false
+	if status == &"current" and data.rent_due_amount != 0:
+		return false
+	if (status == &"due" or status == &"overdue") and data.rent_due_amount <= 0:
+		return false
+	if owned.has(current) and status != &"current":
+		return false
+	return true
+
+func _residence(id: StringName) -> Dictionary:
+	for residence: Dictionary in ResidenceCatalog.all():
+		if residence.id == id:
+			return residence
+	return {}
+
+func _is_string_value(value: Variant) -> bool:
+	return typeof(value) == TYPE_STRING or typeof(value) == TYPE_STRING_NAME
+func _is_int_value(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	return typeof(value) == TYPE_FLOAT and is_equal_approx(value, round(value))
+
+func _apply_profile(data: Dictionary) -> void:
+	var old_residence := current_residence_id
+	var old_rent_status := rent_status
+	var old_rent_amount := rent_due_amount
+	var old_next_rent_due_day := next_rent_due_day
+	credits = int(data.credits)
+	district = str(data.district)
+	day = int(data.day)
+	minute_of_day = int(data.minute_of_day)
+	heat = int(data.heat)
+	alerts = int(data.alerts)
+	workspace_collapsed = data.workspace_collapsed
+	active_module = StringName(str(data.active_module))
+	module_open = data.module_open
+	active_contract_id = StringName(str(data.active_contract_id))
+	mara_favor_owed = data.mara_favor_owed
+	var restored_contracts: Array[Dictionary] = ContractCatalog.all()
+	for index in restored_contracts.size():
+		var record: Dictionary = data.contracts[index]
+		for key in [&"is_playable", &"status", &"phase", &"resolution_id"]:
+			restored_contracts[index][key] = record[key]
+	contracts = restored_contracts
+	var restored_messages: Array[Dictionary] = []
+	for message: Dictionary in data.messages:
+		restored_messages.append(message.duplicate(true))
+	messages = restored_messages
+	current_residence_id = StringName(str(data.current_residence_id))
+	owned_residence_ids = []
+	for raw_id: Variant in data.owned_residence_ids:
+		owned_residence_ids.append(StringName(str(raw_id)))
+	next_rent_due_day = int(data.next_rent_due_day)
+	rent_due_amount = int(data.rent_due_amount)
+	rent_status = StringName(str(data.rent_status))
+	_emit_housing_changes(old_residence, old_rent_status, old_rent_amount, old_next_rent_due_day)
+
+func _emit_housing_changes(old_residence: StringName, old_rent_status: StringName,
+		old_rent_amount: int, old_next_rent_due_day: int) -> void:
+	if old_residence != current_residence_id:
+		residence_changed.emit(current_residence_id)
+	if old_rent_status != rent_status or old_rent_amount != rent_due_amount \
+			or old_next_rent_due_day != next_rent_due_day:
+		rent_changed.emit(rent_status, rent_due_amount, next_rent_due_day)
 
 func add_credits(delta_credits: int) -> void:
 	credits += delta_credits
