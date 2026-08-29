@@ -9,6 +9,33 @@ const MONITOR_GLINTS_UV_RECT := Rect2(0.075, 0.39, 0.17, 0.20)
 const NEON_GLINTS_UV_RECT := Rect2(0.70, 0.13, 0.12, 0.43)
 const KITCHEN_GLINTS_UV_RECT := Rect2(0.84, 0.30, 0.13, 0.11)
 
+const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
+const LoftTexture := preload("res://assets/tier-2-appartment-update.png")
+const ART_PROFILES := {
+	&"lower_vesper_studio": {
+		"texture": ApartmentTexture,
+		"source_size": ART_SIZE,
+		"window": WINDOW_UV_RECT,
+		"cyan_spill": CYAN_SPILL_UV_RECT,
+		"magenta_spill": MAGENTA_SPILL_UV_RECT,
+		"monitor_glints": MONITOR_GLINTS_UV_RECT,
+		"neon_glints": NEON_GLINTS_UV_RECT,
+		"kitchen_glints": KITCHEN_GLINTS_UV_RECT,
+		"room_flash": ROOM_FLASH_UV_RECT,
+	},
+	&"sector_9_loft": {
+		"texture": LoftTexture,
+		"source_size": Vector2(1672.0, 941.0),
+		"window": Rect2(0.245, 0.17, 0.36, 0.45),
+		"cyan_spill": Rect2(0.03, 0.43, 0.31, 0.30),
+		"magenta_spill": Rect2(0.08, 0.14, 0.28, 0.40),
+		"monitor_glints": Rect2(0.07, 0.17, 0.25, 0.35),
+		"neon_glints": Rect2(0.27, 0.20, 0.32, 0.38),
+		"kitchen_glints": Rect2(0.73, 0.22, 0.24, 0.36),
+		"room_flash": Rect2(0.08, 0.10, 0.84, 0.80),
+	},
+}
+
 const ATMOSPHERE_TRANSITION_SECONDS := 25.0
 const ATMOSPHERE_PROFILES := {
 	&"night": {
@@ -33,7 +60,6 @@ const ATMOSPHERE_PROFILES := {
 		"ambient": Color(0.18, 0.27, 0.36, 0.06),
 	},
 }
-const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
 
 const RainShader := preload("res://scenes/main/rain.gdshader")
 const GlintShader := preload("res://scenes/main/glints.gdshader")
@@ -59,6 +85,7 @@ var _atmosphere_tween: Tween
 var _time_band: StringName = &""
 var _spill_multiplier := 1.0
 
+var _art_profile: Dictionary = ART_PROFILES[&"lower_vesper_studio"]
 const CYAN_PERIOD := 13.0
 const MAGENTA_PERIOD := 19.0
 
@@ -142,13 +169,31 @@ func _ready() -> void:
 func setup(gs: Node) -> void:
 	if _gs == gs:
 		return
-	if _gs != null and _gs.clock_changed.is_connected(_on_clock_changed):
-		_gs.clock_changed.disconnect(_on_clock_changed)
+	if _gs != null:
+		if _gs.clock_changed.is_connected(_on_clock_changed):
+			_gs.clock_changed.disconnect(_on_clock_changed)
+		if _gs.residence_changed.is_connected(_on_residence_changed):
+			_gs.residence_changed.disconnect(_on_residence_changed)
 	_gs = gs
 	if _gs == null:
 		return
 	_gs.clock_changed.connect(_on_clock_changed)
+	_gs.residence_changed.connect(_on_residence_changed)
+	_apply_residence_art(_gs.current_residence_id)
 	_apply_time_band(time_band_for(_gs.minute_of_day), true)
+
+func _on_residence_changed(id: StringName) -> void:
+	_apply_residence_art(id)
+
+func _apply_residence_art(id: StringName) -> void:
+	var profile: Dictionary = ART_PROFILES.get(id, {})
+	if profile.is_empty() or profile == _art_profile:
+		return
+	_art_profile = profile
+	if _background == null:
+		return
+	_background.texture = profile.texture
+	apply_environment_layout()
 
 func time_band_for(minute_of_day: int) -> StringName:
 	var minute := minute_of_day % 1440
@@ -281,20 +326,14 @@ func _trigger_lightning(strength: float = 1.0) -> void:
 func art_rect_for(viewport_size: Vector2) -> Rect2:
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return Rect2()
-	var scale := maxf(viewport_size.x / ART_SIZE.x, viewport_size.y / ART_SIZE.y)
-	var art_size := ART_SIZE * scale
+	var source_size: Vector2 = _art_profile.source_size
+	var scale := maxf(viewport_size.x / source_size.x, viewport_size.y / source_size.y)
+	var art_size := source_size * scale
 	var origin := (viewport_size - art_size) * 0.5
 	return Rect2(origin, art_size)
 
 func window_rect_for(viewport_size: Vector2) -> Rect2:
-	var art_rect := art_rect_for(viewport_size)
-	return Rect2(
-		art_rect.position + Vector2(
-			art_rect.size.x * WINDOW_UV_RECT.position.x,
-			art_rect.size.y * WINDOW_UV_RECT.position.y),
-		Vector2(
-			art_rect.size.x * WINDOW_UV_RECT.size.x,
-			art_rect.size.y * WINDOW_UV_RECT.size.y))
+	return _art_space_rect_for(viewport_size, _art_profile.window)
 
 func apply_environment_layout() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
@@ -305,22 +344,22 @@ func apply_environment_layout() -> void:
 	var window_rect := window_rect_for(size)
 	_window_rain.position = window_rect.position
 	_window_rain.size = window_rect.size
-	var cyan_rect := _art_space_rect_for(size, CYAN_SPILL_UV_RECT)
+	var cyan_rect := _art_space_rect_for(size, _art_profile.cyan_spill)
 	_cyan_spill.position = cyan_rect.position
 	_cyan_spill.size = cyan_rect.size
-	var magenta_rect := _art_space_rect_for(size, MAGENTA_SPILL_UV_RECT)
-	var monitor_rect := _art_space_rect_for(size, MONITOR_GLINTS_UV_RECT)
-	_monitor_glints.position = monitor_rect.position
-	_monitor_glints.size = monitor_rect.size
-	var neon_rect := _art_space_rect_for(size, NEON_GLINTS_UV_RECT)
-	_neon_glints.position = neon_rect.position
-	_neon_glints.size = neon_rect.size
-	var kitchen_rect := _art_space_rect_for(size, KITCHEN_GLINTS_UV_RECT)
-	_kitchen_glints.position = kitchen_rect.position
-	_kitchen_glints.size = kitchen_rect.size
+	var magenta_rect := _art_space_rect_for(size, _art_profile.magenta_spill)
 	_magenta_spill.position = magenta_rect.position
 	_magenta_spill.size = magenta_rect.size
-	var room_flash_rect := _art_space_rect_for(size, ROOM_FLASH_UV_RECT)
+	var monitor_rect := _art_space_rect_for(size, _art_profile.monitor_glints)
+	_monitor_glints.position = monitor_rect.position
+	_monitor_glints.size = monitor_rect.size
+	var neon_rect := _art_space_rect_for(size, _art_profile.neon_glints)
+	_neon_glints.position = neon_rect.position
+	_neon_glints.size = neon_rect.size
+	var kitchen_rect := _art_space_rect_for(size, _art_profile.kitchen_glints)
+	_kitchen_glints.position = kitchen_rect.position
+	_kitchen_glints.size = kitchen_rect.size
+	var room_flash_rect := _art_space_rect_for(size, _art_profile.room_flash)
 	_ambient_grade.position = room_flash_rect.position
 	_ambient_grade.size = room_flash_rect.size
 	_room_flash.position = room_flash_rect.position

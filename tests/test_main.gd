@@ -2,6 +2,8 @@ extends "res://tests/test_base.gd"
 
 const GameStateScript := preload("res://autoload/game_state.gd")
 const MainScene := preload("res://scenes/main/main.tscn")
+const StudioTexture := preload("res://assets/tier-1-appartment.png")
+const LoftTexture := preload("res://assets/tier-2-appartment-update.png")
 
 var _main: Control
 var _environment: Control
@@ -16,6 +18,18 @@ func _finish_after_ready() -> void:
 	check(ambience != null and ambience.bus == &"Ambience" and ambience.playing,
 		"Main owns one playing ambience loop")
 	check(_environment.get_child_count() == 4, "environment has four visual layers")
+	var background := _environment.get_node("ApartmentBackground") as TextureRect
+	check(background.texture == StudioTexture,
+		"Main starts EnvironmentLayer on Studio artwork")
+	_gs.current_residence_id = &"sector_9_loft"
+	_gs.residence_changed.emit(_gs.current_residence_id)
+	check(background.texture == LoftTexture
+		and _environment._art_profile == _environment.ART_PROFILES[&"sector_9_loft"],
+		"Main-injected GameState selects Loft artwork through residence_changed")
+	_gs.current_residence_id = &"lower_vesper_studio"
+	_gs.residence_changed.emit(_gs.current_residence_id)
+	check(background.texture == StudioTexture,
+		"Main-injected GameState can restore Studio artwork")
 	_main.queue_free()
 	_gs.queue_free()
 	finish()

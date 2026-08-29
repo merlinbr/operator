@@ -2,6 +2,7 @@ extends "res://tests/test_base.gd"
 
 const EnvironmentScene := preload("res://scenes/main/environment.tscn")
 const ApartmentTexture := preload("res://assets/tier-1-appartment.png")
+const LoftTexture := preload("res://assets/tier-2-appartment-update.png")
 const ART_SIZE := Vector2(1672.0, 941.0)
 const WINDOW_UV_RECT := Rect2(0.555, 0.136, 0.219, 0.435)
 const GlintShader := preload("res://scenes/main/glints.gdshader")
@@ -221,6 +222,7 @@ func _run() -> void:
 	var gs := GameStateScript.new()
 	gs.name = "TimeState"
 	root.add_child(gs)
+	gs.reset_profile()
 	check(environment.time_band_for(179) == &"night"
 		and environment.time_band_for(180) == &"pre_dawn"
 		and environment.time_band_for(359) == &"pre_dawn"
@@ -239,6 +241,73 @@ func _run() -> void:
 		and background.modulate.is_equal_approx(Color.WHITE)
 		and is_equal_approx(window_rain.modulate.a, 1.0),
 		"initial GameState setup applies night targets immediately")
+	var studio_profile: Dictionary = environment._art_profile
+	var loft_profile: Dictionary = environment.ART_PROFILES[&"sector_9_loft"]
+	check(background.texture == ApartmentTexture
+		and background.texture.resource_path == "res://assets/tier-1-appartment.png"
+		and studio_profile.source_size == ART_SIZE
+		and studio_profile.window == WINDOW_UV_RECT,
+		"Studio selects its existing artwork and authored profile")
+	check(LoftTexture.resource_path == "res://assets/tier-2-appartment-update.png"
+		and LoftTexture.get_width() == 1672 and LoftTexture.get_height() == 941,
+		"Loft artwork uses the required 1672x941 asset")
+	check(loft_profile.source_size == Vector2(1672.0, 941.0)
+		and loft_profile.window != studio_profile.window
+		and loft_profile.cyan_spill != studio_profile.cyan_spill
+		and loft_profile.magenta_spill != studio_profile.magenta_spill
+		and loft_profile.monitor_glints != studio_profile.monitor_glints
+		and loft_profile.neon_glints != studio_profile.neon_glints
+		and loft_profile.kitchen_glints != studio_profile.kitchen_glints
+		and loft_profile.room_flash != studio_profile.room_flash,
+		"Loft has a separately authored window, spill, glint, and lightning profile")
+	gs.current_residence_id = &"sector_9_loft"
+	gs.residence_changed.emit(gs.current_residence_id)
+	var loft_window_rect: Rect2 = environment._art_space_rect_for(
+		environment.size, loft_profile.window)
+	check(background.texture == LoftTexture
+		and background.texture.resource_path == "res://assets/tier-2-appartment-update.png"
+		and environment._art_profile == loft_profile
+		and window_rain.position.is_equal_approx(loft_window_rect.position)
+		and window_rain.size.is_equal_approx(loft_window_rect.size),
+		"residence change selects Loft artwork and remaps its window")
+	var loft_layer_names: Array[StringName] = []
+	for child in environment.get_children():
+		loft_layer_names.append(child.name)
+	check(loft_layer_names == [&"ApartmentBackground", &"WindowRain", &"ExteriorLight", &"Lightning"]
+		and environment.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and background.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and window_rain.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and exterior_light.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		and lightning.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"Loft switch preserves environment layer order and mouse filtering")
+	var expected_loft_cyan: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.cyan_spill)
+	var expected_loft_magenta: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.magenta_spill)
+	var expected_loft_monitor: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.monitor_glints)
+	var expected_loft_neon: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.neon_glints)
+	var expected_loft_kitchen: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.kitchen_glints)
+	var expected_loft_room: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.room_flash)
+	check(cyan_spill.position.is_equal_approx(expected_loft_cyan.position)
+		and cyan_spill.size.is_equal_approx(expected_loft_cyan.size)
+		and magenta_spill.position.is_equal_approx(expected_loft_magenta.position)
+		and magenta_spill.size.is_equal_approx(expected_loft_magenta.size)
+		and monitor_glints.position.is_equal_approx(expected_loft_monitor.position)
+		and monitor_glints.size.is_equal_approx(expected_loft_monitor.size)
+		and neon_glints.position.is_equal_approx(expected_loft_neon.position)
+		and neon_glints.size.is_equal_approx(expected_loft_neon.size)
+		and kitchen_glints.position.is_equal_approx(expected_loft_kitchen.position)
+		and kitchen_glints.size.is_equal_approx(expected_loft_kitchen.size)
+		and ambient_grade.position.is_equal_approx(expected_loft_room.position)
+		and ambient_grade.size.is_equal_approx(expected_loft_room.size)
+		and room_flash.position.is_equal_approx(expected_loft_room.position)
+		and room_flash.size.is_equal_approx(expected_loft_room.size)
+		and window_flash.position.is_equal_approx(loft_window_rect.position)
+		and window_flash.size.is_equal_approx(loft_window_rect.size),
+		"Loft residence remaps every authored effect rectangle")
+	gs.current_residence_id = &"lower_vesper_studio"
+	gs.residence_changed.emit(gs.current_residence_id)
+	check(background.texture == ApartmentTexture
+		and environment._art_profile == studio_profile,
+		"residence change back selects Studio artwork and profile")
 	var same_band_tween: Variant = environment._atmosphere_tween
 	gs.minute_of_day = 60
 	gs.clock_changed.emit(gs.day, gs.minute_of_day)
