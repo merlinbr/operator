@@ -66,6 +66,28 @@ func _run() -> void:
 
 	check(main.theme != null, "theme applied at Main root")
 	check(primary.get_child_count() == 1, "home panel active on start")
+	var home_panel: Control = primary.get_child(0)
+	gs.current_residence_id = &"lower_vesper_studio"
+	gs.owned_residence_ids = []
+	gs.rent_status = &"current"
+	gs.rent_due_amount = 0
+	gs.credits = gs.START_CREDITS
+	gs.active_contract_id = &""
+	home_panel.refresh()
+	var compact_primary_height := primary.size.y
+	var home_move_button := home_panel.find_child("MoveButton", true, false) as Button
+	home_move_button.pressed.emit()
+	var confirm_move := home_panel.find_child("ConfirmMoveButton", true, false) as Button
+	check(confirm_move != null and confirm_move.visible, "move confirmation opens")
+	check(primary.size.y > compact_primary_height,
+		"primary panel expands when Home confirmation opens")
+	var required_home_height := home_panel.get_combined_minimum_size().y
+	check(primary.size.y >= required_home_height,
+		"primary panel expands to fit the active Home content")
+	check(confirm_move.get_global_rect().end.y <= primary.get_global_rect().end.y + 1.0,
+		"move confirmation fits inside the primary panel")
+	var cancel_move := home_panel.find_child("CancelResidenceButton", true, false) as Button
+	cancel_move.pressed.emit()
 	check(primary.visible, "home panel visible on start")
 	check(gs.active_module == &"home", "active module is home")
 	check(gs.module_open, "module starts open")

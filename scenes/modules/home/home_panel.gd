@@ -7,6 +7,9 @@ const COLOR_AMBER := Color(1.0, 0.82353, 0.47843)
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392, 1)
 const MASTER_DEFAULT := 80.0
 
+const CONFIRMATION_MIN_HEIGHT := 520.0
+
+signal residence_layout_changed
 signal rest_requested
 signal rent_payment_requested
 signal move_requested(id: StringName)
@@ -161,6 +164,9 @@ func setup(gs: Node, data: Variant = null) -> void:
 func refresh() -> void:
 	_refresh()
 
+func layout_minimum_height() -> float:
+	return CONFIRMATION_MIN_HEIGHT if _confirm_box.visible else 0.0
+
 func _make_audio_row(channel_name: String, slider_name: String, value_name: String) -> Dictionary:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
@@ -271,7 +277,7 @@ func _on_move_pressed() -> void:
 		_residence_rent_text(current, _gs.rent_status))
 	_confirm_button.name = "ConfirmMoveButton"
 	_confirm_button.text = "CONFIRM MOVE"
-	_confirm_box.visible = true
+	_set_confirmation_visible(true)
 	_update_residence_actions()
 
 func _on_buyout_pressed() -> void:
@@ -288,7 +294,7 @@ func _on_buyout_pressed() -> void:
 		_residence_rent_text(residence, _gs.rent_status))
 	_confirm_button.name = "ConfirmBuyoutButton"
 	_confirm_button.text = "CONFIRM BUYOUT"
-	_confirm_box.visible = true
+	_set_confirmation_visible(true)
 	_update_residence_actions()
 
 
@@ -329,8 +335,15 @@ func _pending_action_valid() -> bool:
 func _clear_confirmation() -> void:
 	_pending_move_id = &""
 	_pending_buyout = false
-	_confirm_box.visible = false
+	_set_confirmation_visible(false)
 	_update_residence_actions()
+
+func _set_confirmation_visible(visible: bool) -> void:
+	if _confirm_box.visible == visible:
+		return
+	_confirm_box.visible = visible
+	custom_minimum_size = Vector2(0.0, CONFIRMATION_MIN_HEIGHT if visible else 0.0)
+	residence_layout_changed.emit()
 
 func _residence_rent_text(residence: Dictionary, status: StringName) -> String:
 	if status == &"current" and _gs.owned_residence_ids.has(residence.id):

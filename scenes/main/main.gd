@@ -198,6 +198,7 @@ func _build_primary_module(id: StringName) -> void:
 		panel.move_requested.connect(_on_home_move_requested)
 		panel.buyout_requested.connect(_on_home_buyout_requested)
 		panel.setup(gs)
+		panel.residence_layout_changed.connect(_on_home_layout_changed)
 	else:
 		panel.setup(gs, gs.messages if id == &"comms" else null)
 	_apply_visibility()
@@ -258,6 +259,9 @@ func _refresh_home() -> void:
 func _on_home_rest_requested() -> void:
 	if gs.rest_until_next_day():
 		_refresh_home()
+
+func _on_home_layout_changed() -> void:
+	_apply_layout()
 
 func _on_home_rent_payment_requested() -> void:
 	if gs.pay_rent():
@@ -360,8 +364,14 @@ func _apply_layout() -> void:
 	var r_h: float = r_bottom - r_top
 
 	var p_class: Vector2 = _size_class(gs.active_module)
-	var p_w: float = r_w * p_class.x
-	var p_h: float = r_h * p_class.y
+	var panel_minimum := Vector2.ZERO
+	if primary_host.get_child_count() > 0:
+		var primary_panel := primary_host.get_child(0) as Control
+		panel_minimum = primary_panel.get_combined_minimum_size()
+		if primary_panel.has_method("layout_minimum_height"):
+			panel_minimum.y = maxf(panel_minimum.y, primary_panel.layout_minimum_height())
+	var p_w: float = maxf(r_w * p_class.x, panel_minimum.x)
+	var p_h: float = maxf(r_h * p_class.y, panel_minimum.y)
 	primary_host.position = Vector2(r_left, r_top)
 	primary_host.size = Vector2(maxf(p_w, 0.0), maxf(p_h, 0.0))
 
