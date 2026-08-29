@@ -309,6 +309,13 @@ func _run() -> void:
 			and lamp_texture.fill == GradientTexture2D.FILL_RADIAL \
 			and lamp_texture.gradient.get_color(0).r > lamp_texture.gradient.get_color(0).b
 	check(lamp_glow_ready, "Loft renders a warm localized lamp glow")
+	if lamp_glow != null:
+		var lamp_alpha_before := lamp_glow.modulate.a
+		environment._process(0.7)
+		var lamp_alpha_after := lamp_glow.modulate.a
+		check(absf(lamp_alpha_after - lamp_alpha_before) > 0.005
+			and lamp_alpha_after > 0.15 and lamp_alpha_after < 0.35,
+			"Lamp glow flickers within a restrained warm range")
 	var expected_loft_cyan: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.cyan_spill)
 	var expected_loft_magenta: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.magenta_spill)
 	var expected_loft_monitor: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.monitor_glints)

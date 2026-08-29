@@ -95,6 +95,8 @@ var _spill_multiplier := 1.0
 var _art_profile: Dictionary = ART_PROFILES[&"lower_vesper_studio"]
 const CYAN_PERIOD := 13.0
 const MAGENTA_PERIOD := 19.0
+const LAMP_BASE_ALPHA := 0.24
+const LAMP_FLICKER_PERIOD := 3.7
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -129,7 +131,7 @@ func _ready() -> void:
 	_exterior_light.add_child(_ambient_grade)
 	_cyan_spill = _make_spill("CyanSpill", Color("#39e6ff"), 0.11)
 	_magenta_spill = _make_spill("MagentaSpill", Color("#f25dff"), 0.09)
-	_lamp_glow = _make_spill("LampGlow", Color("#ffd17a"), 0.16)
+	_lamp_glow = _make_spill("LampGlow", Color("#ffd17a"), LAMP_BASE_ALPHA)
 	_monitor_glints = _make_glint("MonitorGlints", Color("#66e9ff"), 2.0)
 	_neon_glints = _make_glint("NeonGlints", Color("#e36dff"), 7.0)
 	_kitchen_glints = _make_glint("KitchenGlints", Color("#b9efff"), 13.0)
@@ -275,6 +277,11 @@ func _process(delta: float) -> void:
 	_light_time += delta
 	_cyan_spill.modulate.a = (0.09 + 0.02 * sin(_light_time * TAU / CYAN_PERIOD)) * _spill_multiplier
 	_magenta_spill.modulate.a = (0.075 + 0.018 * sin(_light_time * TAU / MAGENTA_PERIOD + 1.4)) * _spill_multiplier
+	if _lamp_glow.visible:
+		var lamp_alpha := LAMP_BASE_ALPHA \
+			+ 0.035 * sin(_light_time * TAU / LAMP_FLICKER_PERIOD) \
+			+ 0.015 * sin(_light_time * TAU / 0.83 + 0.6)
+		_lamp_glow.modulate.a = clampf(lamp_alpha, 0.17, 0.31)
 
 func _make_spill(spill_name: String, color: Color, center_alpha: float) -> TextureRect:
 	var spill := TextureRect.new()
