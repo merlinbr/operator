@@ -38,6 +38,7 @@ const ART_PROFILES := {
 		"neon_glints": Rect2(0.27, 0.20, 0.32, 0.38),
 		"kitchen_glints": Rect2(0.73, 0.22, 0.24, 0.36),
 		"room_flash": Rect2(0.08, 0.10, 0.84, 0.80),
+		"lamp_glow": Rect2(0.62, 0.64, 0.18, 0.25),
 	},
 }
 
@@ -74,6 +75,7 @@ var _window_rain: ColorRect
 var _exterior_light: Control
 var _cyan_spill: TextureRect
 var _magenta_spill: TextureRect
+var _lamp_glow: TextureRect
 var _monitor_glints: ColorRect
 var _neon_glints: ColorRect
 var _kitchen_glints: ColorRect
@@ -127,11 +129,13 @@ func _ready() -> void:
 	_exterior_light.add_child(_ambient_grade)
 	_cyan_spill = _make_spill("CyanSpill", Color("#39e6ff"), 0.11)
 	_magenta_spill = _make_spill("MagentaSpill", Color("#f25dff"), 0.09)
+	_lamp_glow = _make_spill("LampGlow", Color("#ffd17a"), 0.16)
 	_monitor_glints = _make_glint("MonitorGlints", Color("#66e9ff"), 2.0)
 	_neon_glints = _make_glint("NeonGlints", Color("#e36dff"), 7.0)
 	_kitchen_glints = _make_glint("KitchenGlints", Color("#b9efff"), 13.0)
 	_exterior_light.add_child(_cyan_spill)
 	_exterior_light.add_child(_magenta_spill)
+	_exterior_light.add_child(_lamp_glow)
 	_exterior_light.add_child(_monitor_glints)
 	_exterior_light.add_child(_neon_glints)
 	_exterior_light.add_child(_kitchen_glints)
@@ -380,6 +384,11 @@ func apply_environment_layout() -> void:
 	var kitchen_rect := _art_space_rect_for(size, _art_profile.kitchen_glints)
 	_kitchen_glints.position = kitchen_rect.position
 	_kitchen_glints.size = kitchen_rect.size
+	var lamp_uv: Rect2 = _art_profile.get("lamp_glow", Rect2())
+	var lamp_rect := _art_space_rect_for(size, lamp_uv)
+	_lamp_glow.position = lamp_rect.position
+	_lamp_glow.size = lamp_rect.size
+	_lamp_glow.visible = lamp_rect.size.x > 0.0 and lamp_rect.size.y > 0.0
 	var room_flash_rect := _art_space_rect_for(size, _art_profile.room_flash)
 	_ambient_grade.position = room_flash_rect.position
 	_ambient_grade.size = room_flash_rect.size

@@ -263,6 +263,10 @@ func _run() -> void:
 	var loft_cutouts: Array = loft_profile.get("rain_cutouts", [])
 	check(loft_cutouts.size() == 3,
 		"Loft has authored rain exclusions for foreground objects")
+	var loft_lamp_glow: Rect2 = loft_profile.get("lamp_glow", Rect2())
+	check(loft_lamp_glow.size.x > 0.0 and loft_lamp_glow.size.y > 0.0
+		and not studio_profile.has("lamp_glow"),
+		"Loft has an authored table-lamp glow region")
 	gs.current_residence_id = &"sector_9_loft"
 	gs.residence_changed.emit(gs.current_residence_id)
 	var loft_window_rect: Rect2 = environment._art_space_rect_for(
@@ -292,6 +296,19 @@ func _run() -> void:
 		and exterior_light.mouse_filter == Control.MOUSE_FILTER_IGNORE
 		and lightning.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"Loft switch preserves environment layer order and mouse filtering")
+	var lamp_glow := exterior_light.get_node_or_null("LampGlow") as TextureRect
+	var lamp_glow_ready := lamp_glow != null
+	if lamp_glow != null:
+		var lamp_texture := lamp_glow.texture as GradientTexture2D
+		var lamp_rect: Rect2 = environment._art_space_rect_for(environment.size, loft_lamp_glow)
+		lamp_glow_ready = lamp_glow.visible \
+			and lamp_glow.position.is_equal_approx(lamp_rect.position) \
+			and lamp_glow.size.is_equal_approx(lamp_rect.size) \
+			and lamp_glow.mouse_filter == Control.MOUSE_FILTER_IGNORE \
+			and lamp_texture != null \
+			and lamp_texture.fill == GradientTexture2D.FILL_RADIAL \
+			and lamp_texture.gradient.get_color(0).r > lamp_texture.gradient.get_color(0).b
+	check(lamp_glow_ready, "Loft renders a warm localized lamp glow")
 	var expected_loft_cyan: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.cyan_spill)
 	var expected_loft_magenta: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.magenta_spill)
 	var expected_loft_monitor: Rect2 = environment._art_space_rect_for(environment.size, loft_profile.monitor_glints)
