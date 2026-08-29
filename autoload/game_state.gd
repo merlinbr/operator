@@ -349,9 +349,14 @@ func _emit_housing_changes(old_residence: StringName, old_rent_status: StringNam
 			or old_next_rent_due_day != next_rent_due_day:
 		rent_changed.emit(rent_status, rent_due_amount, next_rent_due_day)
 
-func add_credits(delta_credits: int) -> void:
+func _add_credits(delta_credits: int) -> void:
 	credits += delta_credits
-func add_message(sender: String, preview: String) -> void:
+
+func add_credits(delta_credits: int) -> void:
+	_add_credits(delta_credits)
+	save_profile()
+
+func _add_message(sender: String, preview: String) -> void:
 	messages.append({
 		"id": StringName("msg_%s_%d" % [sender.to_lower(), messages.size()]),
 		"sender": sender,
@@ -361,12 +366,135 @@ func add_message(sender: String, preview: String) -> void:
 	messages_changed.emit()
 	push_ticker("NEW MESSAGE // " + sender, true)
 
+func add_message(sender: String, preview: String) -> void:
+	_add_message(sender, preview)
+	save_profile()
+
 func advance_minutes(minutes: int) -> void:
-	minute_of_day += minutes
-	while minute_of_day >= 1440:
-		minute_of_day -= 1440
-		day += 1
+	if minutes <= 0:
+		return
+	_advance_minutes(minutes)
+	save_profile()
+
+func _advance_minutes(minutes: int) -> void:
+	var remaining := minutes
+	while remaining > 0:
+		var until_midnight := 1440 - minute_of_day
+		if remaining < until_midnight:
+			minute_of_day += remaining
+			remaining = 0
+		else:
+			minute_of_day = 0
+			remaining -= until_midnight
+			day += 1
+			_settle_calendar_day(day)
 	clock_changed.emit(day, minute_of_day)
+
+func _settle_calendar_day(settlement_day: int) -> void:
+	var residence := _residence(current_residence_id)
+	if residence.is_empty() or _is_owned(current_residence_id):
+		return
+	if rent_status == &"due":
+		if settlement_day >= next_rent_due_day + 3:
+			_set_rent_state(&"overdue", rent_due_amount, next_rent_due_day)
+			_housing_feedback("RENT OVERDUE", "Rent is overdue. Existing work remains available.")
+		return
+	if rent_status == &"overdue":
+		return
+	if settlement_day < next_rent_due_day:
+		return
+	var rent := int(residence.monthly_rent)
+	if credits >= rent:
+		credits -= rent
+		_set_rent_state(&"current", 0, next_rent_due_day + 30)
+		_housing_feedback("RENT PAID // %s CR" % format_credits(rent),
+			"%s rent paid automatically." % residence.name)
+	else:
+		_set_rent_state(&"due", rent, next_rent_due_day)
+		_housing_feedback("RENT DUE // %s CR" % format_credits(rent),
+			"%s rent is due." % residence.name)
+
+func _is_owned(id: StringName) -> bool:
+	return owned_residence_ids.has(id)
+
+func _set_rent_state(status: StringName, amount: int, due_day: int) -> void:
+	var old_status := rent_status
+	var old_amount := rent_due_amount
+	var old_due_day := next_rent_due_day
+	rent_status = status
+	rent_due_amount = amount
+	next_rent_due_day = due_day
+	if old_status != rent_status or old_amount != rent_due_amount or old_due_day != next_rent_due_day:
+		rent_changed.emit(rent_status, rent_due_amount, next_rent_due_day)
+
+
+func _housing_feedback(ticker: String, preview: String) -> void:
+	push_ticker(ticker, true)
+	_add_message("SYSTEM", preview)
+
+func rest_until_next_day() -> bool:
+	if active_contract_id != &"":
+		return false
+	day += 1
+	minute_of_day = 0
+	_settle_calendar_day(day)
+	clock_changed.emit(day, minute_of_day)
+	_housing_feedback("REST // ADVANCE TO DAY %d" % day, "Advanced to Day %d at midnight." % day)
+	save_profile()
+	return true
+
+func pay_rent() -> bool:
+	if (rent_status != &"due" and rent_status != &"overdue") \
+			or rent_due_amount <= 0 or credits < rent_due_amount:
+		return false
+	var amount := rent_due_amount
+	credits -= amount
+	_set_rent_state(&"current", 0, day + 30)
+	_housing_feedback("RENT PAID // %s CR" % format_credits(amount), "Rent payment accepted.")
+	save_profile()
+	return true
+
+func move_to_residence(id: StringName) -> bool:
+	if active_contract_id != &"" or rent_status != &"current":
+		return false
+	var residence := _residence(id)
+	if residence.is_empty() or id == current_residence_id:
+		return false
+	var move_in_cost := int(residence.move_in_cost)
+	if credits < move_in_cost:
+		return false
+	var old_residence := current_residence_id
+	var old_rent_status := rent_status
+	var old_rent_amount := rent_due_amount
+	var old_next_rent_due_day := next_rent_due_day
+	credits -= move_in_cost
+	current_residence_id = id
+	rent_status = &"current"
+	rent_due_amount = 0
+	next_rent_due_day = day + 30
+	_emit_housing_changes(old_residence, old_rent_status, old_rent_amount, old_next_rent_due_day)
+
+	_housing_feedback("MOVED // " + residence.name.to_upper(),
+		"Residence changed to %s." % residence.name)
+	save_profile()
+	return true
+
+func buy_out_current_residence() -> bool:
+	const STUDIO_ID := &"lower_vesper_studio"
+	const BUYOUT_COST := 150000
+	if active_contract_id != &"" or current_residence_id != STUDIO_ID \
+			or _is_owned(STUDIO_ID) or rent_status != &"current" or credits < BUYOUT_COST:
+		return false
+	credits -= BUYOUT_COST
+	owned_residence_ids.append(STUDIO_ID)
+	rent_status = &"current"
+	rent_due_amount = 0
+	next_rent_due_day = day + 30
+	rent_changed.emit(rent_status, rent_due_amount, next_rent_due_day)
+	_housing_feedback("STUDIO BUYOUT // %s CR" % format_credits(BUYOUT_COST),
+		"Lower Vesper Studio is now owned and rent-free.")
+	save_profile()
+	return true
 
 func _contract_index(id: StringName) -> int:
 	for index in contracts.size():
@@ -415,8 +543,9 @@ func accept_contract(id: StringName) -> bool:
 	active_contract_id = id
 	contracts_changed.emit()
 	push_ticker("CONTRACT ACCEPTED // " + contract.code, true)
-	add_message("MARA", contract.accept_message)
+	_add_message("MARA", contract.accept_message)
 	contract_accepted.emit(id)
+	save_profile()
 	return true
 
 func proceed_contract(id: StringName) -> bool:
@@ -426,14 +555,14 @@ func proceed_contract(id: StringName) -> bool:
 	var contract: Dictionary = contracts[index]
 	if contract.status != &"active" or contract.phase != &"ready_to_proceed":
 		return false
-	advance_minutes(contract.proceed_minutes)
+	_advance_minutes(contract.proceed_minutes)
 	contract.phase = &"customs_hold"
 	contracts_changed.emit()
 	push_ticker(contract.complication.title, true)
-	add_message("MARA", contract.proceed_message)
+	_add_message("MARA", contract.proceed_message)
 	contract_proceeded.emit(id)
+	save_profile()
 	return true
- 
 
 func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	var index := _contract_index(id)
@@ -446,7 +575,7 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	if choice.is_empty():
 		return false
 	if choice.credit_delta != 0:
-		add_credits(choice.credit_delta)
+		_add_credits(choice.credit_delta)
 	if choice.heat_delta != 0:
 		heat += choice.heat_delta
 	if choice.get("sets_mara_favor_owed", false):
@@ -461,6 +590,7 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	contracts_changed.emit()
 	_push_resolution_feedback(choice)
 	contract_resolved.emit(id, contract.status)
+	save_profile()
 	return true
 
 func _unlock_contract(id: StringName) -> void:
@@ -472,25 +602,28 @@ func _unlock_contract(id: StringName) -> void:
 
 func _push_resolution_feedback(choice: Dictionary) -> void:
 	push_ticker(choice.ticker, true)
-	add_message(choice.message_sender, choice.message_preview)
+	_add_message(choice.message_sender, choice.message_preview)
 
 func set_workspace_collapsed(collapsed: bool) -> void:
 	if workspace_collapsed == collapsed:
 		return
 	workspace_collapsed = collapsed
 	workspace_collapsed_changed.emit(collapsed)
+	save_profile()
 
 func set_active_module(id: StringName) -> void:
 	if active_module == id:
 		return
 	active_module = id
 	active_module_changed.emit(id)
+	save_profile()
 
 func set_module_open(open: bool) -> void:
 	if module_open == open:
 		return
 	module_open = open
 	module_open_changed.emit(open)
+	save_profile()
 
 func toggle_workspace() -> void:
 	set_workspace_collapsed(not workspace_collapsed)

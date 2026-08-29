@@ -253,4 +253,70 @@ func _run() -> void:
 	check(not no_favor_gs.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor"),
 		"hidden favor settlement is rejected")
 	no_favor_gs.free()
+	var housing_gs := GameStateScript.new()
+	housing_gs.day = 29
+	housing_gs.minute_of_day = 23 * 60 + 30
+	housing_gs.active_contract_id = &"cold_chain_delivery"
+	check(not housing_gs.rest_until_next_day(), "REST rejects while active contract")
+	housing_gs.active_contract_id = &""
+	check(housing_gs.rest_until_next_day(), "REST advances without active contract")
+	check(housing_gs.day == 30 and housing_gs.minute_of_day == 0, "REST reaches next midnight")
+	check(housing_gs.credits == 10480 and housing_gs.rent_status == &"current"
+		and housing_gs.next_rent_due_day == 60, "REST auto-pays the 2,000 CR Studio rent")
+	housing_gs.day = 59
+	housing_gs.minute_of_day = 1439
+	housing_gs.credits = 1000
+	housing_gs.advance_minutes(2)
+	check(housing_gs.day == 60 and housing_gs.rent_status == &"due"
+		and housing_gs.rent_due_amount == 2000, "insufficient rent creates one Studio bill")
+	housing_gs.advance_minutes(3 * 1440)
+	check(housing_gs.rent_status == &"overdue" and housing_gs.rent_due_amount == 2000,
+		"one unpaid bill becomes overdue after three days")
+	housing_gs.credits = 3000
+	check(housing_gs.pay_rent(), "PAY RENT settles an overdue bill")
+	check(housing_gs.credits == 1000 and housing_gs.rent_status == &"current"
+		and housing_gs.rent_due_amount == 0 and housing_gs.next_rent_due_day == 93,
+		"PAY RENT schedules thirty days from payment")
+	housing_gs.credits = 12480
+	check(housing_gs.move_to_residence(&"sector_9_loft"), "moving to the Loft succeeds")
+	check(housing_gs.credits == 4480 and housing_gs.current_residence_id == &"sector_9_loft"
+		and housing_gs.next_rent_due_day == housing_gs.day + 30,
+		"moving deducts exactly 8,000 CR and starts a Loft term")
+	check(not housing_gs.buy_out_current_residence(), "Loft buyout is rejected")
+	housing_gs.current_residence_id = &"lower_vesper_studio"
+	housing_gs.credits = 150000
+	housing_gs.rent_status = &"current"
+	housing_gs.rent_due_amount = 0
+	check(housing_gs.buy_out_current_residence(), "Studio buyout succeeds")
+	check(housing_gs.credits == 0 and housing_gs.owned_residence_ids == [&"lower_vesper_studio"],
+		"Studio buyout deducts exactly 150,000 CR and records ownership")
+	var loft_rent_gs := GameStateScript.new()
+	loft_rent_gs.current_residence_id = &"sector_9_loft"
+	loft_rent_gs.day = 20
+	loft_rent_gs.minute_of_day = 1439
+	loft_rent_gs.next_rent_due_day = 21
+	loft_rent_gs.credits = 12480
+	loft_rent_gs.advance_minutes(2)
+	check(loft_rent_gs.credits == 6480 and loft_rent_gs.next_rent_due_day == 51,
+		"calendar settlement auto-pays the 6,000 CR Loft rent")
+	loft_rent_gs.free()
+	var multi_due_gs := GameStateScript.new()
+	multi_due_gs.day = 29
+	multi_due_gs.minute_of_day = 1439
+	multi_due_gs.credits = 100000
+	multi_due_gs.advance_minutes(31 * 1440 + 1)
+	check(multi_due_gs.day == 61 and multi_due_gs.credits == 96000
+		and multi_due_gs.next_rent_due_day == 90,
+		"travel crossing multiple due dates settles each rent exactly once")
+	multi_due_gs.free()
+	housing_gs.free()
+	var blocked_housing_gs := GameStateScript.new()
+	blocked_housing_gs.rent_status = &"due"
+	blocked_housing_gs.rent_due_amount = 2000
+	blocked_housing_gs.credits = 200000
+	check(not blocked_housing_gs.move_to_residence(&"sector_9_loft")
+		and not blocked_housing_gs.buy_out_current_residence(),
+		"due rent blocks moving and buying")
+	blocked_housing_gs.free()
+
 	gs.free()
