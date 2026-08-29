@@ -192,6 +192,12 @@ func _build_primary_module(id: StringName) -> void:
 	if id == &"contracts":
 		panel.contract_selected.connect(_on_contract_selected)
 		panel.setup(gs, gs.contracts)
+	elif id == &"home":
+		panel.rest_requested.connect(_on_home_rest_requested)
+		panel.rent_payment_requested.connect(_on_home_rent_payment_requested)
+		panel.move_requested.connect(_on_home_move_requested)
+		panel.buyout_requested.connect(_on_home_buyout_requested)
+		panel.setup(gs)
 	else:
 		panel.setup(gs, gs.messages if id == &"comms" else null)
 	_apply_visibility()
@@ -241,6 +247,29 @@ func _on_contract_selected(contract_id: StringName) -> void:
 func _on_contract_accept(id: StringName) -> void:
 	gs.accept_contract(id)
 
+
+func _refresh_home() -> void:
+	if gs.active_module != &"home" or primary_host.get_child_count() == 0:
+		return
+	var panel := primary_host.get_child(0)
+	if panel.has_method("refresh"):
+		panel.refresh()
+
+func _on_home_rest_requested() -> void:
+	if gs.rest_until_next_day():
+		_refresh_home()
+
+func _on_home_rent_payment_requested() -> void:
+	if gs.pay_rent():
+		_refresh_home()
+
+func _on_home_move_requested(id: StringName) -> void:
+	if gs.move_to_residence(id):
+		_refresh_home()
+
+func _on_home_buyout_requested() -> void:
+	if gs.buy_out_current_residence():
+		_refresh_home()
 func _on_contract_proceed(id: StringName) -> void:
 	gs.proceed_contract(id)
 

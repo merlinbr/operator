@@ -41,6 +41,89 @@ func _run() -> void:
 		"Home exposes all audio controls")
 	check(master.value == 80.0 and ambience.value == 100.0 and sfx.value == 50.0,
 		"Home applies authored session defaults")
+	var residence_text := ""
+	for label in home.find_children("*", "Label", true, false):
+		residence_text += label.text + "\n"
+	check(residence_text.contains("RESIDENCE") and residence_text.contains("LOWER VESPER STUDIO")
+		and residence_text.contains("LEASED") and residence_text.contains("2,000 CR")
+		and residence_text.contains("NEXT DUE") and residence_text.contains("DAY 30"),
+		"Home shows the current leased residence and rent schedule")
+	var rest := home.find_child("RestButton", true, false) as Button
+	var pay_rent := home.find_child("PayRentButton", true, false) as Button
+	var move := home.find_child("MoveButton", true, false) as Button
+	var buyout := home.find_child("BuyoutButton", true, false) as Button
+	var confirm := home.find_child("ConfirmResidenceButton", true, false) as Button
+	var cancel := home.find_child("CancelResidenceButton", true, false) as Button
+	var confirmation_box := home.find_child("ResidenceConfirmation", true, false) as VBoxContainer
+	var confirmation := home.find_child("ResidenceConfirmLabel", true, false) as Label
+	var requested_move := [&""]
+	var requested_rest := [false]
+	var requested_buyout := [false]
+	home.move_requested.connect(func(id: StringName) -> void: requested_move[0] = id)
+	home.rest_requested.connect(func() -> void: requested_rest[0] = true)
+	home.buyout_requested.connect(func() -> void: requested_buyout[0] = true)
+	check(rest != null and rest.text == "REST // ADVANCE TO DAY 15" and not rest.disabled,
+		"REST advances to the next day while idle")
+	check(pay_rent != null and not pay_rent.visible, "PAY RENT is hidden while rent is current")
+	var credits_before_move := gs.credits
+	var residence_before_move := gs.current_residence_id
+	move.pressed.emit()
+	check(confirmation.visible and confirmation.text.contains("CREDITS       12,480 CR")
+		and confirmation.text.contains("EXACT COST    8,000 CR")
+		and confirmation.text.contains("CURRENT RENT  2,000 CR / 30 DAYS")
+		and confirmation.text.contains("RESULTING RENT 6,000 CR / 30 DAYS"),
+		"Move confirmation shows exact Credits, cost, and rent transition")
+	confirm.pressed.emit()
+	check(requested_move[0] == &"sector_9_loft" and gs.credits == credits_before_move
+		and gs.current_residence_id == residence_before_move,
+		"Move confirmation emits intent without mutating GameState")
+	rest.pressed.emit()
+	check(requested_rest[0], "REST emits an intent signal")
+	gs.active_contract_id = &"cold_chain_delivery"
+	gs.contracts_changed.emit()
+	check(rest.disabled, "REST is disabled during active work")
+	gs.active_contract_id = &""
+	gs.rent_status = &"due"
+	gs.rent_due_amount = 2000
+	gs.credits = 1000
+	gs.rent_changed.emit(gs.rent_status, gs.rent_due_amount, gs.next_rent_due_day)
+	check(not pay_rent.visible, "PAY RENT stays hidden when the due bill is unaffordable")
+	gs.credits = 2000
+	gs.rent_changed.emit(gs.rent_status, gs.rent_due_amount, gs.next_rent_due_day)
+	check(pay_rent.visible, "PAY RENT appears when a due bill is funded")
+	var requested_pay := [false]
+	home.rent_payment_requested.connect(func() -> void: requested_pay[0] = true)
+	pay_rent.pressed.emit()
+	check(requested_pay[0] and gs.credits == 2000, "PAY RENT emits intent without mutating GameState")
+	gs.rent_status = &"current"
+	gs.rent_due_amount = 0
+	gs.credits = 150000
+	check(buyout != null and buyout.visible, "Studio buyout is offered when funded")
+	buyout.pressed.emit()
+	check(confirmation.visible and confirmation.text.contains("CREDITS       150,000 CR")
+		and confirmation.text.contains("EXACT COST    150,000 CR")
+		and confirmation.text.contains("CURRENT RENT  2,000 CR / 30 DAYS")
+		and confirmation.text.contains("RESULTING RENT RENT FREE"),
+		"Buyout confirmation shows exact Credits, cost, and rent transition")
+	gs.credits = 149999
+	gs.credits_changed.emit(gs.credits)
+	confirm.pressed.emit()
+	check(confirmation.visible and not requested_buyout[0],
+		"Stale buyout confirmation emits no intent and remains open")
+	cancel.pressed.emit()
+	check(not confirmation_box.visible, "Residence confirmation can be cancelled")
+	gs.credits = 150000
+	gs.credits_changed.emit(gs.credits)
+	buyout.pressed.emit()
+	var credits_before_buyout := gs.credits
+	confirm.pressed.emit()
+	check(requested_buyout[0] and gs.credits == credits_before_buyout,
+		"Buyout confirmation emits intent without mutating GameState")
+	cancel.pressed.emit()
+	gs.credits = 12480
+	gs.rent_status = &"current"
+	gs.rent_due_amount = 0
+	gs.rent_changed.emit(gs.rent_status, gs.rent_due_amount, gs.next_rent_due_day)
 	master.value = 35.0
 	master.value_changed.emit(master.value)
 	check(master_value.text == "35%" and not AudioServer.is_bus_mute(AudioServer.get_bus_index(&"Master")),
