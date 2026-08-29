@@ -18,6 +18,7 @@ const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
 const ResidenceCatalog := preload("res://data/housing/residence_catalog.gd")
 const PROFILE_PATH := "user://operator_save.json"
 const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
+const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
 const PROFILE_VERSION := 1
 
 signal contracts_changed
@@ -96,8 +97,9 @@ func reset_profile() -> void:
 	next_rent_due_day = 30
 	rent_due_amount = 0
 	rent_status = &"current"
-	if FileAccess.file_exists(PROFILE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(PROFILE_PATH))
+	for path in [PROFILE_PATH, PROFILE_TEMP_PATH, PROFILE_BACKUP_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_emit_housing_changes(old_residence, old_rent_status, old_rent_amount, old_next_rent_due_day)
 
 func save_profile() -> bool:
@@ -113,41 +115,58 @@ func save_profile() -> bool:
 		return false
 	var profile_path := ProjectSettings.globalize_path(PROFILE_PATH)
 	var temporary_path := ProjectSettings.globalize_path(PROFILE_TEMP_PATH)
+	var backup_path := ProjectSettings.globalize_path(PROFILE_BACKUP_PATH)
 	if FileAccess.file_exists(PROFILE_PATH):
-		var remove_error := DirAccess.remove_absolute(profile_path)
-		if remove_error != OK:
+		if FileAccess.file_exists(PROFILE_BACKUP_PATH):
+			var remove_backup_error := DirAccess.remove_absolute(backup_path)
+			if remove_backup_error != OK:
+				push_error("Unable to replace operator profile.")
+				return false
+		var backup_error := DirAccess.rename_absolute(profile_path, backup_path)
+		if backup_error != OK:
 			push_error("Unable to replace operator profile.")
 			return false
 	var rename_error := DirAccess.rename_absolute(temporary_path, profile_path)
 	if rename_error != OK:
+		if FileAccess.file_exists(PROFILE_BACKUP_PATH) and not FileAccess.file_exists(PROFILE_PATH):
+			DirAccess.rename_absolute(backup_path, profile_path)
 		push_error("Unable to replace operator profile.")
 		return false
+	if FileAccess.file_exists(PROFILE_BACKUP_PATH):
+		DirAccess.remove_absolute(backup_path)
 	return true
 
 func load_profile() -> bool:
-	if not FileAccess.file_exists(PROFILE_PATH):
-		reset_profile()
-		return false
-	var file := FileAccess.open(PROFILE_PATH, FileAccess.READ)
+	var saw_profile := false
+	for path in [PROFILE_PATH, PROFILE_TEMP_PATH, PROFILE_BACKUP_PATH]:
+		if not FileAccess.file_exists(path):
+			continue
+		saw_profile = true
+		var parsed: Variant = _read_profile_candidate(path)
+		if parsed != null:
+			_apply_profile(parsed)
+			return true
+	if saw_profile:
+		return _reject_profile("profile candidates are unreadable, malformed, or incompatible")
+	reset_profile()
+	return false
+
+func _read_profile_candidate(path: String) -> Variant:
+	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return _reject_profile("profile cannot be read")
+		return null
 	var text := file.get_as_text()
 	var read_error := file.get_error()
 	file.close()
 	if read_error != OK:
-		return _reject_profile("profile cannot be read")
+		return null
 	var parser := JSON.new()
-	var parse_error := parser.parse(text)
-	if parse_error != OK:
-		return _reject_profile("profile JSON is malformed")
-	var parsed: Variant = parser.data
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return _reject_profile("profile JSON is malformed")
-	var reason := _validate_profile(parsed)
-	if not reason.is_empty():
-		return _reject_profile(reason)
-	_apply_profile(parsed)
-	return true
+	if parser.parse(text) != OK or typeof(parser.data) != TYPE_DICTIONARY:
+		return null
+	var parsed: Dictionary = parser.data
+	if not _validate_profile(parsed).is_empty():
+		return null
+	return parsed
 
 func _reject_profile(reason: String) -> bool:
 	push_error("Unable to load operator profile: %s. Starting clean." % reason)
@@ -264,7 +283,8 @@ func _validate_housing(data: Dictionary) -> bool:
 	if not _is_string_value(data.current_residence_id):
 		return false
 	var current := StringName(str(data.current_residence_id))
-	if _residence(current).is_empty():
+	var residence := _residence(current)
+	if residence.is_empty():
 		return false
 	if typeof(data.owned_residence_ids) != TYPE_ARRAY:
 		return false
@@ -287,7 +307,8 @@ func _validate_housing(data: Dictionary) -> bool:
 		return false
 	if status == &"current" and data.rent_due_amount != 0:
 		return false
-	if (status == &"due" or status == &"overdue") and data.rent_due_amount <= 0:
+	if (status == &"due" or status == &"overdue") \
+			and data.rent_due_amount != int(residence.monthly_rent):
 		return false
 	if owned.has(current) and status != &"current":
 		return false

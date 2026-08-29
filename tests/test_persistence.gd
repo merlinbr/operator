@@ -72,10 +72,61 @@ func _run() -> void:
 		and restored.get_contract(&"cold_chain_delivery").status == &"active"
 		and restored.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
 		"active contract record restores")
+	var stable := GameStateScript.new()
+	stable.credits = 24680
+	check(stable.save_profile(), "stable profile saves before replacement failure")
+	var backup_blocker_path := ProjectSettings.globalize_path(GameStateScript.PROFILE_BACKUP_PATH)
+	var blocker_error := DirAccess.make_dir_absolute(backup_blocker_path)
+	check(blocker_error == OK, "replacement failure setup blocks backup rename")
+	check(not stable.save_profile(), "failed replacement reports false")
+	var stable_recovered := GameStateScript.new()
+	check(stable_recovered.load_profile() and stable_recovered.credits == 24680,
+		"failed replacement preserves the prior profile")
+	DirAccess.remove_absolute(backup_blocker_path)
+	stable_recovered.reset_profile()
+	stable_recovered.free()
+	stable.free()
+
+	var recovery_payload: Dictionary = restored._profile_payload()
+	var temporary_profile := FileAccess.open(GameStateScript.PROFILE_TEMP_PATH, FileAccess.WRITE)
+	temporary_profile.store_string(JSON.stringify(recovery_payload))
+	temporary_profile.close()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	var temp_recovered := GameStateScript.new()
+	check(temp_recovered.load_profile() and temp_recovered.credits == 98765
+		and temp_recovered.current_residence_id == &"sector_9_loft",
+		"interrupted replacement recovers a valid temporary profile")
+	temp_recovered.reset_profile()
+	temp_recovered.free()
+
+	var backup_profile := FileAccess.open(GameStateScript.PROFILE_BACKUP_PATH, FileAccess.WRITE)
+	backup_profile.store_string(JSON.stringify(recovery_payload))
+	backup_profile.close()
+	var backup_recovered := GameStateScript.new()
+	check(backup_recovered.load_profile() and backup_recovered.credits == 98765
+		and backup_recovered.current_residence_id == &"sector_9_loft",
+		"interrupted replacement recovers a valid prior profile")
+	backup_recovered.reset_profile()
+	backup_recovered.free()
+
+	var invalid_rent_payload: Dictionary = restored._profile_payload()
+	invalid_rent_payload.rent_due_amount = 1
+	var invalid_rent := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	invalid_rent.store_string(JSON.stringify(invalid_rent_payload))
+	invalid_rent.close()
+	var invalid_rent_recovered := GameStateScript.new()
+	check(not invalid_rent_recovered.load_profile()
+		and invalid_rent_recovered.current_residence_id == &"lower_vesper_studio"
+		and invalid_rent_recovered.rent_status == &"current"
+		and invalid_rent_recovered.rent_due_amount == 0
+		and invalid_rent_recovered.owned_residence_ids.is_empty(),
+		"one-credit rent bill is rejected and starts clean state")
+	invalid_rent_recovered.free()
 
 	var malformed := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	malformed.store_string("{ definitely not JSON")
 	malformed.close()
+
 	var recovered := GameStateScript.new()
 	check(not recovered.load_profile(), "malformed profile is rejected")
 	check(recovered.credits == recovered.START_CREDITS
