@@ -1,6 +1,9 @@
 shader_type canvas_item;
 
 uniform float intensity : hint_range(0.0, 1.0) = 1.0;
+uniform vec4 rain_cutout_0 = vec4(0.0);
+uniform vec4 rain_cutout_1 = vec4(0.0);
+uniform vec4 rain_cutout_2 = vec4(0.0);
 
 float hash1(float value) {
 	return fract(sin(value) * 43758.5453);
@@ -26,6 +29,13 @@ float rounded_box_sdf(vec2 point, vec2 half_size, float radius) {
 	return length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
 }
 
+float rain_cutout_mask(vec2 uv, vec4 cutout) {
+	float active = step(0.0001, cutout.z) * step(0.0001, cutout.w);
+	vec2 lower = step(cutout.xy, uv);
+	vec2 upper = step(uv, cutout.xy + cutout.zw);
+	return 1.0 - active * lower.x * lower.y * upper.x * upper.y;
+}
+
 void fragment() {
 	vec2 uv = UV;
 	float alpha = 0.0;
@@ -36,5 +46,8 @@ void fragment() {
 		vec2((uv.x - 0.055) / 0.945, uv.y) - vec2(0.5),
 		vec2(0.475), 0.060);
 	float window_mask = 1.0 - smoothstep(0.0, 0.015, window_sdf);
+	window_mask *= rain_cutout_mask(uv, rain_cutout_0);
+	window_mask *= rain_cutout_mask(uv, rain_cutout_1);
+	window_mask *= rain_cutout_mask(uv, rain_cutout_2);
 	COLOR = vec4(0.706, 0.863, 1.0, min(alpha * intensity * 3.0, 0.30) * window_mask);
 }

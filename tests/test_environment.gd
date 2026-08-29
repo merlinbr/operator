@@ -260,6 +260,9 @@ func _run() -> void:
 		and loft_profile.kitchen_glints != studio_profile.kitchen_glints
 		and loft_profile.room_flash != studio_profile.room_flash,
 		"Loft has a separately authored window, spill, glint, and lightning profile")
+	var loft_cutouts: Array = loft_profile.get("rain_cutouts", [])
+	check(loft_cutouts.size() == 3,
+		"Loft has authored rain exclusions for foreground objects")
 	gs.current_residence_id = &"sector_9_loft"
 	gs.residence_changed.emit(gs.current_residence_id)
 	var loft_window_rect: Rect2 = environment._art_space_rect_for(
@@ -270,6 +273,15 @@ func _run() -> void:
 		and window_rain.position.is_equal_approx(loft_window_rect.position)
 		and window_rain.size.is_equal_approx(loft_window_rect.size),
 		"residence change selects Loft artwork and remaps its window")
+	if loft_cutouts.size() == 3:
+		var rain_mask_applied := true
+		for index in loft_cutouts.size():
+			var cutout: Rect2 = loft_cutouts[index]
+			var expected_cutout := Vector4(
+				cutout.position.x, cutout.position.y, cutout.size.x, cutout.size.y)
+			rain_mask_applied = rain_mask_applied \
+				and rain_material.get_shader_parameter("rain_cutout_%d" % index) == expected_cutout
+		check(rain_mask_applied, "Loft rain shader receives authored exclusions")
 	var loft_layer_names: Array[StringName] = []
 	for child in environment.get_children():
 		loft_layer_names.append(child.name)

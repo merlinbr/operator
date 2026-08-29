@@ -26,7 +26,12 @@ const ART_PROFILES := {
 	&"sector_9_loft": {
 		"texture": LoftTexture,
 		"source_size": Vector2(1672.0, 941.0),
-		"window": Rect2(0.245, 0.17, 0.36, 0.45),
+		"window": Rect2(0.255, 0.175, 0.34, 0.42),
+		"rain_cutouts": [
+			Rect2(0.00, 0.70, 0.24, 0.30),
+			Rect2(0.14, 0.66, 0.30, 0.34),
+			Rect2(0.92, 0.00, 0.08, 1.00),
+		],
 		"cyan_spill": Rect2(0.03, 0.43, 0.31, 0.30),
 		"magenta_spill": Rect2(0.08, 0.14, 0.28, 0.40),
 		"monitor_glints": Rect2(0.07, 0.17, 0.25, 0.35),
@@ -108,6 +113,7 @@ func _ready() -> void:
 	var rain_material := ShaderMaterial.new()
 	rain_material.shader = RainShader
 	_window_rain.material = rain_material
+	_apply_rain_profile(_art_profile)
 	add_child(_window_rain)
 
 	_exterior_light = Control.new()
@@ -190,10 +196,25 @@ func _apply_residence_art(id: StringName) -> void:
 	if profile.is_empty() or profile == _art_profile:
 		return
 	_art_profile = profile
+	_apply_rain_profile(profile)
 	if _background == null:
 		return
 	_background.texture = profile.texture
 	apply_environment_layout()
+
+func _apply_rain_profile(profile: Dictionary) -> void:
+	if _window_rain == null:
+		return
+	var material := _window_rain.material as ShaderMaterial
+	if material == null:
+		return
+	var cutouts: Array = profile.get("rain_cutouts", [])
+	for index in 3:
+		var value := Vector4.ZERO
+		if index < cutouts.size():
+			var rect: Rect2 = cutouts[index]
+			value = Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+		material.set_shader_parameter("rain_cutout_%d" % index, value)
 
 func time_band_for(minute_of_day: int) -> StringName:
 	var minute := minute_of_day % 1440
