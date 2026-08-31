@@ -3,6 +3,7 @@ extends "res://tests/test_base.gd"
 const GameStateScript := preload("res://autoload/game_state.gd")
 const HomePanel := preload("res://scenes/modules/home/home_panel.tscn")
 const CommsPanel := preload("res://scenes/modules/comms/comms_panel.tscn")
+const ContractsPanel := preload("res://scenes/modules/contracts/contracts_panel.tscn")
 
 func _run() -> void:
 	var native_buses := [&"Master", &"Ambience", &"SFX"]
@@ -143,13 +144,29 @@ func _run() -> void:
 
 	var comms := CommsPanel.instantiate()
 	root.add_child(comms)
-	comms.setup(gs, gs.messages)
+	comms.setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
 	var rows := comms.find_children("Row*", "HBoxContainer", true, false)
 	check(rows.size() == 3, "three message rows — got %d" % rows.size())
 	var first_row_text := ""
 	for label in rows[0].find_children("*", "Label", true, false):
 		first_row_text += label.text + " "
 	check(first_row_text.contains("●") and first_row_text.contains("MARA"), "unread marker and sender")
+	var comms_text := ""
+	for label in comms.find_children("*", "Label", true, false):
+		comms_text += label.text + "\n"
+	check(comms_text.contains("MARA // KNOWN") and comms_text.contains("VESPER CLINIC // COLD"),
+		"COMMS renders the two visible Contact standings")
+	var contracts := ContractsPanel.instantiate()
+	root.add_child(contracts)
+	gs.contracts[3].is_playable = true
+	contracts.setup(gs, gs.contracts)
+	var contract_text := ""
+	for button: Button in contracts.find_children("*", "Button", true, false):
+		contract_text += button.text + "\n"
+	check(contract_text.contains("MARA // TRUSTED REQUIRED")
+		and contract_text.contains("DATA RETRIEVAL   NETWORK OFFLINE"),
+		"Contracts distinguishes standing requirements from unpublished work")
+	contracts.queue_free()
 	comms.queue_free()
 	for bus_name in native_buses:
 		var bus_index := AudioServer.get_bus_index(bus_name)

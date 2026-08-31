@@ -29,6 +29,17 @@ func _run() -> void:
 	check(gs.credits == 12480, "starts with 12480 credits")
 	check(gs.district == "LOWER VESPER", "starts in LOWER VESPER")
 	check(gs.workspace_collapsed == false, "workspace starts expanded")
+	check(gs.standing_for(&"mara") == 1 and gs.standing_for(&"vesper_clinic") == 0,
+		"fresh Contact standings are Known and Cold")
+	check(not gs.accept_contract(&"silent_partner"),
+		"Trusted Mara work rejects a Known operator")
+	var standing_gs := GameStateScript.new()
+	var changed_contacts := [0]
+	standing_gs.contacts_changed.connect(func() -> void: changed_contacts[0] += 1)
+	_resolve_c1042(standing_gs, &"call_mara")
+	check(standing_gs.standing_for(&"mara") == 2 and changed_contacts[0] == 1,
+		"qualifying resolution raises only Mara to Trusted")
+	standing_gs.free()
 
 	var got_credits := [0]
 	gs.credits_changed.connect(func(v: int) -> void: got_credits[0] = v)

@@ -108,6 +108,7 @@ func _build_shell() -> void:
 	_build_ticker()
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
 	gs.contracts_changed.connect(_on_contracts_changed)
+	gs.contacts_changed.connect(_on_contacts_changed)
 	gs.contract_accepted.connect(_on_contract_accepted)
 	gs.contract_proceeded.connect(_on_contract_proceeded)
 	gs.contract_resolved.connect(_on_contract_resolved)
@@ -199,8 +200,8 @@ func _build_primary_module(id: StringName) -> void:
 		panel.buyout_requested.connect(_on_home_buyout_requested)
 		panel.setup(gs)
 		panel.residence_layout_changed.connect(_on_home_layout_changed)
-	else:
-		panel.setup(gs, gs.messages if id == &"comms" else null)
+	elif id == &"comms":
+		panel.setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
 	_apply_visibility()
 
 func close_topmost() -> void:
@@ -314,6 +315,10 @@ func _on_contracts_changed() -> void:
 	if _selected_contract_id != &"" and context_host.get_child_count() > 0:
 		context_host.get_child(0).setup(gs, gs.get_contract(_selected_contract_id))
 
+
+func _on_contacts_changed() -> void:
+	if gs.active_module == &"comms" and gs.module_open:
+		primary_host.get_child(0).setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
 func _close_contract_detail() -> void:
 	_selected_contract_id = &""
 	close_context()

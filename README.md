@@ -2,7 +2,7 @@
 
 A cyberpunk operations RPG — build a life and an organization as an independent operator in a dystopian corporate society.
 
-> **Status:** early prototype. The current build contains the navigable operations-terminal shell, a Tier 1 apartment environment, and a deterministic three-contract early-game portfolio. It has no persistent save, simulation, combat, or procedural content systems.
+> **Status:** early prototype. The current build contains the navigable operations-terminal shell, a Tier 1 apartment environment, a deterministic three-contract early-game portfolio, and a persistent single-profile save. It has no simulation, combat, or procedural content systems.
 
 ## About
 

@@ -19,14 +19,14 @@ func _run() -> void:
 	var buttons: Array[Button] = []
 	for child in panel.find_children("*", "Button", true, false):
 		buttons.append(child)
-	check(buttons.size() == 3, "three catalog rows")
+	check(buttons.size() == 7, "seven catalog rows")
 	check(buttons[0].text.contains("COLD-CHAIN DELIVERY") and buttons[0].text.contains("1,400 CR"),
 		"C-1042 shows its available reward")
 	check(not buttons[0].disabled, "C-1042 is selectable")
 	check(buttons[1].disabled and buttons[1].text.contains("NETWORK OFFLINE"),
-		"Data Retrieval is visibly unavailable")
-	check(buttons[2].disabled and buttons[2].text.contains("NETWORK OFFLINE"),
-		"encrypted offer is visibly unavailable")
+		"Data Retrieval is visibly unpublished")
+	check(buttons[4].disabled and buttons[4].text.contains("NETWORK OFFLINE"),
+		"Clinic Asset Recovery is visibly unpublished")
 	buttons[0].pressed.emit()
 	check(seen_id[0] == &"cold_chain_delivery", "C-1042 emits only its ID")
 

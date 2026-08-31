@@ -72,6 +72,16 @@ func _run() -> void:
 		and restored.get_contract(&"cold_chain_delivery").status == &"active"
 		and restored.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
 		"active contract record restores")
+	var legacy: Dictionary = restored._profile_payload()
+	legacy.version = 1
+	legacy.erase("contact_standing")
+	legacy.contracts = legacy.contracts.slice(0, 3)
+	var migrated := restored._migrate_v1_profile(legacy)
+	check(migrated.version == 2 and migrated.contracts.size() == 7
+		and migrated.credits == restored.credits
+		and migrated.contact_standing[&"mara"] == 1
+		and migrated.contact_standing[&"vesper_clinic"] == 0,
+		"version-1 profile migration preserves state and adds Contacts and contracts")
 	var stable := GameStateScript.new()
 	stable.credits = 24680
 	check(stable.save_profile(), "stable profile saves before replacement failure")

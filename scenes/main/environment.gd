@@ -81,7 +81,7 @@ var _neon_glints: ColorRect
 var _kitchen_glints: ColorRect
 var _lightning: Control
 var _window_flash: ColorRect
-var _room_flash: ColorRect
+var _room_flash: TextureRect
 var _lightning_timer: Timer
 var _flash_tween: Tween
 var _light_time := 0.0
@@ -152,12 +152,8 @@ func _ready() -> void:
 	_window_flash.color = Color(0.62, 0.84, 1.0, 1.0)
 	_window_flash.modulate.a = 0.0
 	_window_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_room_flash = ColorRect.new()
-	_room_flash.name = "RoomFlash"
-	_room_flash.color = Color(0.53, 0.70, 1.0, 1.0)
-	_room_flash.modulate.a = 0.0
-	_room_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_lightning.add_child(_window_flash)
+	_room_flash = _make_room_flash(_art_profile)
 	_lightning.add_child(_room_flash)
 	_lightning_timer = Timer.new()
 	_lightning_timer.name = "LightningTimer"
@@ -203,6 +199,10 @@ func _apply_residence_art(id: StringName) -> void:
 		return
 	_art_profile = profile
 	_apply_rain_profile(profile)
+	if _room_flash != null:
+		var room_texture := _room_flash.texture as GradientTexture2D
+		if room_texture != null:
+			_apply_room_flash_profile(room_texture, profile)
 	if _background == null:
 		return
 	_background.texture = profile.texture
@@ -296,6 +296,35 @@ func _make_spill(spill_name: String, color: Color, center_alpha: float) -> Textu
 	spill.texture = texture
 	spill.modulate = Color(1.0, 1.0, 1.0, center_alpha)
 	return spill
+
+func _room_flash_source(profile: Dictionary) -> Vector2:
+	var window: Rect2 = profile.window
+	var room: Rect2 = profile.room_flash
+	return (window.get_center() - room.position) / room.size
+
+func _make_room_flash(profile: Dictionary) -> TextureRect:
+	var flash := TextureRect.new()
+	flash.name = "RoomFlash"
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.stretch_mode = TextureRect.STRETCH_SCALE
+	var texture := GradientTexture2D.new()
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(0.53, 0.70, 1.0, 1.0))
+	gradient.set_color(1, Color(0.53, 0.70, 1.0, 0.0))
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	_apply_room_flash_profile(texture, profile)
+	flash.texture = texture
+	flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	return flash
+
+func _apply_room_flash_profile(texture: GradientTexture2D, profile: Dictionary) -> void:
+	var source := _room_flash_source(profile)
+	var radius := maxf(
+		maxf(source.distance_to(Vector2.ZERO), source.distance_to(Vector2(1.0, 0.0))),
+		maxf(source.distance_to(Vector2(0.0, 1.0)), source.distance_to(Vector2.ONE)))
+	texture.fill_from = source
+	texture.fill_to = source + Vector2(radius, 0.0)
 
 func _make_gradient(color: Color) -> Gradient:
 	var gradient := Gradient.new()

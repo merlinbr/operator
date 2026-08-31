@@ -229,6 +229,13 @@ The game should prove that **choosing and executing contracts is fun** before ex
 7. **The ship is progression/content, not the identity of the whole game.**
 8. **UI is the primary gameplay surface, not a layer wrapped around an action game.**
 
+## Current prototype vocabulary
+
+- **Contact:** a named source of authored opportunities and messages. The initial progression slice has Mara and the Vesper Clinic Coordinator.
+- **Contact standing:** one-way progress with one Contact, displayed as **COLD**, **KNOWN**, or **TRUSTED**. It gates authored contracts; a resolution can raise standing but this slice never lowers it.
+- **Favor:** a discrete debt owed to Mara. It is separate from Contact standing and can unlock or alter a specific resolution.
+- **Contract:** an authored operation with one Contact, a minimum Contact-standing requirement, and a fixed event-sequence resolution. It is not a generated mission.
+
 ## Open design questions
 
 These are intentionally unresolved and should not be hard-coded yet:
@@ -246,7 +253,6 @@ These are intentionally unresolved and should not be hard-coded yet:
 - how many factions exist in the full game;
 - procedural vs authored contracts;
 - main narrative structure;
-- save structure;
 - exact visual style and UI layout.
 
 ## Current implementation boundary

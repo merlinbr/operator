@@ -155,7 +155,20 @@ func _run() -> void:
 	var lightning: Control = environment.get_node("Lightning")
 	var lightning_timer: Timer = lightning.get_node("LightningTimer")
 	var window_flash: ColorRect = lightning.get_node("WindowFlash")
-	var room_flash: ColorRect = lightning.get_node("RoomFlash")
+	var room_flash: Control = lightning.get_node("RoomFlash")
+	var room_texture: GradientTexture2D
+	if room_flash is TextureRect:
+		room_texture = (room_flash as TextureRect).texture as GradientTexture2D
+	check(room_texture != null, "room flash uses a texture instead of a flat rectangle")
+	if room_texture != null:
+		var room_gradient := room_texture.gradient
+		var room_rect: Rect2 = environment._art_profile.room_flash
+		var profile_window: Rect2 = environment._art_profile.window
+		var expected_source := (profile_window.get_center() - room_rect.position) / room_rect.size
+		check(room_texture.fill == GradientTexture2D.FILL_RADIAL
+			and room_texture.fill_from.is_equal_approx(expected_source)
+			and is_zero_approx(room_gradient.get_color(1).a),
+			"room flash is radial, window-originated, and transparent at its edge")
 	check(lightning.mouse_filter == Control.MOUSE_FILTER_IGNORE
 		and lightning_timer.get_parent() == lightning
 		and lightning_timer.one_shot

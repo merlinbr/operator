@@ -5,6 +5,7 @@ const COLOR_ACCENT := Color(0.22353, 0.81569, 1.0)
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392, 1)
 
 var _rows_box: VBoxContainer
+var _contacts_box: VBoxContainer
 var _built := false
 
 func _ready() -> void:
@@ -25,17 +26,33 @@ func _build_children() -> void:
 	title.add_theme_font_override("font", load("res://assets/fonts/JetBrainsMono-Bold.ttf"))
 	title.add_theme_font_size_override("font_size", 17)
 	vbox.add_child(title)
+	var contacts_title := Label.new()
+	contacts_title.text = "CONTACTS"
+	contacts_title.add_theme_color_override("font_color", COLOR_DIM)
+	vbox.add_child(contacts_title)
+	_contacts_box = VBoxContainer.new()
+	_contacts_box.add_theme_constant_override("separation", 4)
+	vbox.add_child(_contacts_box)
 	_rows_box = VBoxContainer.new()
 	_rows_box.add_theme_constant_override("separation", 4)
 	vbox.add_child(_rows_box)
 
 func setup(_gs: Node, data: Variant = null) -> void:
 	_build_children()
-	var messages: Array = data if data is Array else []
+	var snapshot: Dictionary = data if data is Dictionary else {}
+	for child in _contacts_box.get_children():
+		child.queue_free()
+	for contact: Dictionary in snapshot.get("contacts", []):
+		_contacts_box.add_child(_make_contact_row(contact))
 	for child in _rows_box.get_children():
 		child.queue_free()
-	for i in messages.size():
-		_rows_box.add_child(_make_row(messages[i], i))
+	for i in snapshot.get("messages", []).size():
+		_rows_box.add_child(_make_row(snapshot.messages[i], i))
+
+func _make_contact_row(contact: Dictionary) -> Label:
+	var label := Label.new()
+	label.text = "%s // %s" % [contact.display_name, contact.standing_label]
+	return label
 
 func _make_row(message: Dictionary, index: int) -> HBoxContainer:
 	var row := HBoxContainer.new()

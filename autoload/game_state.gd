@@ -16,12 +16,14 @@ signal residence_changed(id: StringName)
 signal rent_changed(status: StringName, amount: int, next_due_day: int)
 const ContractCatalog := preload("res://data/contracts/contract_catalog.gd")
 const ResidenceCatalog := preload("res://data/housing/residence_catalog.gd")
+const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const PROFILE_PATH := "user://operator_save.json"
 const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
 const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
-const PROFILE_VERSION := 1
+const PROFILE_VERSION := 2
 
 signal contracts_changed
+signal contacts_changed
 signal messages_changed
 signal contract_accepted(id: StringName)
 signal contract_proceeded(id: StringName)
@@ -37,6 +39,7 @@ var contracts: Array[Dictionary] = ContractCatalog.all()
 var active_contract_id: StringName = &""
 var mara_favor_owed := false
 var messages: Array[Dictionary] = DEFAULT_MESSAGES.duplicate(true)
+var contact_standing: Dictionary = _default_contact_standing()
 
 const START_CREDITS := 12480
 const START_DISTRICT := "LOWER VESPER"
@@ -97,6 +100,7 @@ func reset_profile() -> void:
 	next_rent_due_day = 30
 	rent_due_amount = 0
 	rent_status = &"current"
+	contact_standing = _default_contact_standing()
 	for path in [PROFILE_PATH, PROFILE_TEMP_PATH, PROFILE_BACKUP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
@@ -164,6 +168,8 @@ func _read_profile_candidate(path: String) -> Variant:
 	if parser.parse(text) != OK or typeof(parser.data) != TYPE_DICTIONARY:
 		return null
 	var parsed: Dictionary = parser.data
+	if _is_int_value(parsed.get("version", null)) and int(parsed.version) == 1:
+		parsed = _migrate_v1_profile(parsed)
 	if not _validate_profile(parsed).is_empty():
 		return null
 	return parsed
@@ -186,6 +192,7 @@ func _profile_payload() -> Dictionary:
 		"active_module": active_module,
 		"module_open": module_open,
 		"active_contract_id": active_contract_id,
+		"contact_standing": contact_standing.duplicate(true),
 		"contracts": contracts.duplicate(true),
 		"mara_favor_owed": mara_favor_owed,
 		"messages": messages.duplicate(true),
@@ -195,6 +202,65 @@ func _profile_payload() -> Dictionary:
 		"rent_due_amount": rent_due_amount,
 		"rent_status": rent_status,
 	}
+
+func _default_contact_standing() -> Dictionary:
+	var standings := {}
+	for contact: Dictionary in ContactCatalog.all():
+		standings[contact.id] = contact.starting_standing
+	return standings
+
+func standing_for(contact_id: StringName) -> int:
+	return int(contact_standing.get(contact_id, 0))
+
+func contact_snapshot() -> Array[Dictionary]:
+	var snapshot: Array[Dictionary] = []
+	for contact: Dictionary in ContactCatalog.all():
+		var standing := standing_for(contact.id)
+		snapshot.append({
+			"id": contact.id,
+			"display_name": contact.display_name,
+			"standing": standing,
+			"standing_label": ContactCatalog.standing_label(standing),
+		})
+	return snapshot
+
+func _validate_contact_standing(raw: Variant) -> bool:
+	if typeof(raw) != TYPE_DICTIONARY or raw.size() != ContactCatalog.all().size():
+		return false
+	for contact: Dictionary in ContactCatalog.all():
+		if not raw.has(contact.id) or not _is_int_value(raw[contact.id]) \
+				or int(raw[contact.id]) < ContactCatalog.COLD \
+				or int(raw[contact.id]) > ContactCatalog.TRUSTED:
+			return false
+	return true
+
+func _raise_contact_standing(contact_id: StringName, delta: int) -> void:
+	var previous := standing_for(contact_id)
+	var raised := mini(previous + delta, ContactCatalog.TRUSTED)
+	if raised == previous:
+		return
+	contact_standing[contact_id] = raised
+	contacts_changed.emit()
+
+func _migrate_v1_profile(data: Dictionary) -> Dictionary:
+	var migrated := data.duplicate(true)
+	var old_contracts := {}
+	for record: Variant in data.get("contracts", []):
+		if typeof(record) == TYPE_DICTIONARY and _is_string_value(record.get("id", null)):
+			old_contracts[StringName(str(record.id))] = record
+	var merged_contracts := ContractCatalog.all()
+	for contract: Dictionary in merged_contracts:
+		var old: Dictionary = old_contracts.get(contract.id, {})
+		for key in [&"is_playable", &"status", &"phase", &"resolution_id"]:
+			if old.has(key):
+				contract[key] = old[key]
+	migrated.contracts = merged_contracts
+	migrated.contact_standing = _default_contact_standing()
+	var old_recovery: Dictionary = old_contracts.get(&"clinic_asset_recovery", {})
+	if old_recovery.get("status", &"available") == &"completed":
+		migrated.contact_standing[&"vesper_clinic"] = ContactCatalog.KNOWN
+	migrated.version = PROFILE_VERSION
+	return migrated
 
 func _validate_profile(data: Dictionary) -> String:
 	for key in _profile_payload().keys():
@@ -220,6 +286,8 @@ func _validate_profile(data: Dictionary) -> String:
 		return "profile active state is invalid"
 	if typeof(data.mara_favor_owed) != TYPE_BOOL:
 		return "profile favor state is invalid"
+	if not _validate_contact_standing(data.contact_standing):
+		return "profile contact standing is invalid"
 	var contract_reason := _validate_contracts(data.contracts, StringName(str(data.active_contract_id)))
 	if not contract_reason.is_empty():
 		return contract_reason
@@ -353,6 +421,7 @@ func _apply_profile(data: Dictionary) -> void:
 	for message: Dictionary in data.messages:
 		restored_messages.append(message.duplicate(true))
 	messages = restored_messages
+	contact_standing = data.contact_standing.duplicate(true)
 	current_residence_id = StringName(str(data.current_residence_id))
 	owned_residence_ids = []
 	for raw_id: Variant in data.owned_residence_ids:
@@ -552,12 +621,16 @@ func _choice(choices: Array[Dictionary], choice_id: StringName) -> Dictionary:
 			return choice
 	return {}
 
+func is_contract_available(contract: Dictionary) -> bool:
+	return contract.is_playable and contract.status == &"available" \
+		and standing_for(contract.contact_id) >= int(contract.minimum_contact_standing)
+
 func accept_contract(id: StringName) -> bool:
 	var index := _contract_index(id)
 	if index < 0 or active_contract_id != &"":
 		return false
 	var contract: Dictionary = contracts[index]
-	if not contract.is_playable or contract.status != &"available" or contract.phase != &"offer":
+	if not is_contract_available(contract) or contract.phase != &"offer":
 		return false
 	contract.status = &"active"
 	contract.phase = &"ready_to_proceed"
@@ -599,11 +672,13 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 		_add_credits(choice.credit_delta)
 	if choice.heat_delta != 0:
 		heat += choice.heat_delta
+	if choice.contact_standing_delta > 0:
+		_raise_contact_standing(contract.contact_id, int(choice.contact_standing_delta))
 	if choice.get("sets_mara_favor_owed", false):
 		mara_favor_owed = true
 	if choice.get("clears_mara_favor", false):
 		mara_favor_owed = false
-	_unlock_contract(choice.get("unlocks_contract_id", &""))
+	_unlock_contracts(choice.unlocks_contract_ids)
 	contract.status = choice.terminal_status
 	contract.phase = &"resolved"
 	contract.resolution_id = choice_id
@@ -614,12 +689,11 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	save_profile()
 	return true
 
-func _unlock_contract(id: StringName) -> void:
-	if id == &"":
-		return
-	var index := _contract_index(id)
-	if index >= 0:
-		contracts[index].is_playable = true
+func _unlock_contracts(ids: Array) -> void:
+	for id: Variant in ids:
+		var index := _contract_index(StringName(str(id)))
+		if index >= 0:
+			contracts[index].is_playable = true
 
 func _push_resolution_feedback(choice: Dictionary) -> void:
 	push_ticker(choice.ticker, true)
