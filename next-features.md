@@ -48,8 +48,6 @@ The deadline slice and the narrow preparation slice are implemented. The next de
 
 **1. Heat consequence ladder + decay.** Decay in `_settle_calendar_day()` (e.g. −1/day, or only via paid cleaner/contact action per C#2). Threshold events (3 / 6 / 9) broadcast over the existing ticker and `messages` arrays. High heat already hides clean choices via `max_heat`; add the cost side so `bypass` / `force_readout` become tradeoffs. Fold in **`alerts`**: alert level follows heat and gates sweep/audit events, or delete the stat. Do not build A#3/B#3 raid event sequences yet — threshold ticker/message pressure first.
 
-**2. Preparation stage.** New phase `preparing` between `ready_to_proceed` and `customs_hold`. Per-contract authored prep options (1–3 purchases: forged papers, bribe fund, intel route), gated by Credits, surfaced through a `requires_prep` flag in `_available_choices()` — the exact mechanism of the existing heat/favor flags. This is C#4, the cheap v1 of A#1/B#1. No inventory system, no asset catalog.
-
 **Implemented — optional contract preparation.** Cold-Chain Delivery and Data Retrieval offer an optional preparation purchase on the ready screen (no `preparing` phase): a one-time upfront payment unlocks one additional `requires_prep` response without replacing basic options or advancing time, gated by Credits and surfaced through the existing `_available_choices()` filter — the same mechanism the heat/favor flags use. This is C#4 and the preparation recommendation of D, the cheap v1 of A#1/B#1. No inventory system, no asset catalog; the other five contracts have no preparation purchase. See the [approved preparation design](docs/superpowers/specs/2026-09-05-contract-preparation-design.md).
 
 **3. Aftermath + favor ledger.** Each resolution already emits an authored `message_preview`; add a delayed follow-up message or `flags`/`threads` entry that later contracts or messages can reference (C#5, D#3). Generalize `mara_favor_owed: bool` to a per-contact favor integer (owed both directions) with the existing three choice flags preserved (C#6, D#2). Cheap narrative consequence that makes the 7-contract portfolio replayable without new content systems.
@@ -58,4 +56,4 @@ The deadline slice and the narrow preparation slice are implemented. The next de
 
 ## If only two
 
-**Heat ladder + preparation.** Heat consequence pressure deepens the existing risk choices; preparation then adds the missing preparation step without introducing a broad subsystem. Favor/aftermath remains the next depth pass.
+**Heat ladder + preparation.** Heat consequence pressure deepens the existing risk choices; the preparation step is now implemented as an optional ready-screen purchase. Favor/aftermath remains the next depth pass.
