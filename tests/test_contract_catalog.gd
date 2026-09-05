@@ -60,6 +60,10 @@ func _run() -> void:
 			and int(contract.minimum_contact_standing) >= 0
 			and int(contract.minimum_contact_standing) <= 2,
 			"every contract has a valid Contact requirement")
+		check(contract.deadline_window_minutes > contract.proceed_minutes,
+			"a newly published job permits an on-time journey")
+		check(not _choice(contract, &"abort").is_empty(),
+			"every deadline outcome has an authored successor route")
 		for choice: Dictionary in contract.complication.choices:
 			check(choice.has("contact_standing_delta")
 				and int(choice.contact_standing_delta) >= 0

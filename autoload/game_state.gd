@@ -77,6 +77,9 @@ var rent_status: StringName = &"current"
 func _ready() -> void:
 	load_profile()
 
+func _init() -> void:
+	_initialize_deadlines(current_minute())
+
 func reset_profile() -> void:
 	var old_residence := current_residence_id
 	var old_rent_status := rent_status
@@ -101,6 +104,7 @@ func reset_profile() -> void:
 	rent_due_amount = 0
 	rent_status = &"current"
 	contact_standing = _default_contact_standing()
+	_initialize_deadlines(current_minute())
 	for path in [PROFILE_PATH, PROFILE_TEMP_PATH, PROFILE_BACKUP_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
@@ -467,17 +471,23 @@ func advance_minutes(minutes: int) -> void:
 	save_profile()
 
 func _advance_minutes(minutes: int) -> void:
-	var remaining := minutes
-	while remaining > 0:
-		var until_midnight := 1440 - minute_of_day
-		if remaining < until_midnight:
-			minute_of_day += remaining
-			remaining = 0
-		else:
-			minute_of_day = 0
-			remaining -= until_midnight
-			day += 1
+	if minutes <= 0:
+		return
+	var target := current_minute() + minutes
+	_settle_contract_deadlines(current_minute())
+	while current_minute() < target:
+		var midnight := day * 1440
+		var boundary := mini(target, midnight)
+		for contract: Dictionary in contracts:
+			if contract.is_playable and (contract.status == &"available" or contract.status == &"active"):
+				var cutoff := int(contract.deadline_at_minute)
+				if cutoff > current_minute():
+					boundary = mini(boundary, cutoff)
+		day = boundary / 1440 + 1
+		minute_of_day = boundary % 1440
+		if boundary == midnight:
 			_settle_calendar_day(day)
+		_settle_contract_deadlines(boundary)
 	clock_changed.emit(day, minute_of_day)
 
 func _settle_calendar_day(settlement_day: int) -> void:
@@ -525,10 +535,7 @@ func _housing_feedback(ticker: String, preview: String) -> void:
 func rest_until_next_day() -> bool:
 	if active_contract_id != &"":
 		return false
-	day += 1
-	minute_of_day = 0
-	_settle_calendar_day(day)
-	clock_changed.emit(day, minute_of_day)
+	_advance_minutes(1440 - minute_of_day)
 	_housing_feedback("REST // ADVANCE TO DAY %d" % day, "Advanced to Day %d at midnight." % day)
 	save_profile()
 	return true
@@ -615,14 +622,61 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 		available.append(choice)
 	return available
 
-func _choice(choices: Array[Dictionary], choice_id: StringName) -> Dictionary:
+func _choice(choices: Array, choice_id: StringName) -> Dictionary:
 	for choice: Dictionary in choices:
 		if choice.id == choice_id:
 			return choice
 	return {}
 
+func current_minute() -> int:
+	return (day - 1) * 1440 + minute_of_day
+
+func _initialize_deadlines(at_minute: int) -> void:
+	for contract: Dictionary in contracts:
+		if contract.is_playable and contract.status == &"available":
+			contract.deadline_at_minute = at_minute + int(contract.deadline_window_minutes)
+
+func _deadline_passed(contract: Dictionary) -> bool:
+	return int(contract.deadline_at_minute) >= 0 \
+		and current_minute() >= int(contract.deadline_at_minute)
+
+func _settle_contract_deadlines(up_to_minute: int) -> bool:
+	var changed := false
+	while true:
+		var due_index := -1
+		var earliest := up_to_minute + 1
+		for index in contracts.size():
+			var contract: Dictionary = contracts[index]
+			if not contract.is_playable or (contract.status != &"available" and contract.status != &"active"):
+				continue
+			var cutoff := int(contract.deadline_at_minute)
+			if cutoff >= 0 and cutoff <= up_to_minute and cutoff < earliest:
+				due_index = index
+				earliest = cutoff
+		if due_index < 0:
+			break
+		var contract: Dictionary = contracts[due_index]
+		var was_active: bool = contract.status == &"active"
+		contract.status = &"failed" if was_active else &"expired"
+		contract.phase = &"resolved"
+		contract.resolution_id = &"deadline_missed"
+		if active_contract_id == contract.id:
+			active_contract_id = &""
+		var abort_choice := _choice(contract.complication.choices, &"abort")
+		_unlock_contracts(abort_choice.unlocks_contract_ids, earliest)
+		var contact := ContactCatalog.by_id(contract.contact_id)
+		push_ticker("DEADLINE MISSED // " + contract.code, true)
+		_add_message(contact.display_name,
+			"%s // %s: deadline missed. %s" % [contract.code, contract.title,
+				"Contract failed." if was_active else "Offer expired."])
+		contracts_changed.emit()
+		contract_resolved.emit(contract.id, contract.status)
+		changed = true
+	return changed
+
 func is_contract_available(contract: Dictionary) -> bool:
 	return contract.is_playable and contract.status == &"available" \
+		and not _deadline_passed(contract) \
 		and standing_for(contract.contact_id) >= int(contract.minimum_contact_standing)
 
 func accept_contract(id: StringName) -> bool:
@@ -647,9 +701,13 @@ func proceed_contract(id: StringName) -> bool:
 	if index < 0 or active_contract_id != id:
 		return false
 	var contract: Dictionary = contracts[index]
-	if contract.status != &"active" or contract.phase != &"ready_to_proceed":
+	if contract.status != &"active" or contract.phase != &"ready_to_proceed" \
+			or _deadline_passed(contract):
 		return false
 	_advance_minutes(contract.proceed_minutes)
+	if contract.status != &"active" or active_contract_id != id:
+		save_profile()
+		return true
 	contract.phase = &"customs_hold"
 	contracts_changed.emit()
 	push_ticker(contract.complication.title, true)
@@ -663,7 +721,8 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	if index < 0 or active_contract_id != id:
 		return false
 	var contract: Dictionary = contracts[index]
-	if contract.status != &"active" or contract.phase != &"customs_hold":
+	if contract.status != &"active" or contract.phase != &"customs_hold" \
+			or _deadline_passed(contract):
 		return false
 	var choice := _choice(_available_choices(contract), choice_id)
 	if choice.is_empty():
@@ -678,7 +737,7 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 		mara_favor_owed = true
 	if choice.get("clears_mara_favor", false):
 		mara_favor_owed = false
-	_unlock_contracts(choice.unlocks_contract_ids)
+	_unlock_contracts(choice.unlocks_contract_ids, current_minute())
 	contract.status = choice.terminal_status
 	contract.phase = &"resolved"
 	contract.resolution_id = choice_id
@@ -689,11 +748,16 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	save_profile()
 	return true
 
-func _unlock_contracts(ids: Array) -> void:
+func _unlock_contracts(ids: Array, published_at_minute: int) -> void:
 	for id: Variant in ids:
 		var index := _contract_index(StringName(str(id)))
-		if index >= 0:
-			contracts[index].is_playable = true
+		if index < 0:
+			continue
+		var contract: Dictionary = contracts[index]
+		if contract.is_playable or contract.status != &"available":
+			continue
+		contract.is_playable = true
+		contract.deadline_at_minute = published_at_minute + int(contract.deadline_window_minutes)
 
 func _push_resolution_feedback(choice: Dictionary) -> void:
 	push_ticker(choice.ticker, true)
