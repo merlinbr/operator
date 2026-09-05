@@ -20,7 +20,7 @@ const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const PROFILE_PATH := "user://operator_save.json"
 const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
 const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
-const PROFILE_VERSION := 2
+const PROFILE_VERSION := 3
 
 signal contracts_changed
 signal contacts_changed
@@ -152,7 +152,15 @@ func load_profile() -> bool:
 		saw_profile = true
 		var parsed: Variant = _read_profile_candidate(path)
 		if parsed != null:
+			var migrated := int(parsed.version) == 2
+			if migrated:
+				parsed = _migrate_v2_profile(parsed)
+				if not _validate_profile(parsed).is_empty():
+					continue
 			_apply_profile(parsed)
+			var reconciled := _settle_contract_deadlines(current_minute())
+			if migrated or reconciled:
+				save_profile()
 			return true
 	if saw_profile:
 		return _reject_profile("profile candidates are unreadable, malformed, or incompatible")
@@ -249,7 +257,10 @@ func _raise_contact_standing(contact_id: StringName, delta: int) -> void:
 func _migrate_v1_profile(data: Dictionary) -> Dictionary:
 	var migrated := data.duplicate(true)
 	var old_contracts := {}
-	for record: Variant in data.get("contracts", []):
+	var raw_contracts: Variant = data.get("contracts", [])
+	if typeof(raw_contracts) != TYPE_ARRAY:
+		return {}
+	for record: Variant in raw_contracts:
 		if typeof(record) == TYPE_DICTIONARY and _is_string_value(record.get("id", null)):
 			old_contracts[StringName(str(record.id))] = record
 	var merged_contracts := ContractCatalog.all()
@@ -263,6 +274,18 @@ func _migrate_v1_profile(data: Dictionary) -> Dictionary:
 	var old_recovery: Dictionary = old_contracts.get(&"clinic_asset_recovery", {})
 	if old_recovery.get("status", &"available") == &"completed":
 		migrated.contact_standing[&"vesper_clinic"] = ContactCatalog.KNOWN
+	migrated.version = 2
+	return migrated
+
+func _migrate_v2_profile(data: Dictionary) -> Dictionary:
+	var migrated := data.duplicate(true)
+	var authored := ContractCatalog.all()
+	var saved_minute := (int(data.day) - 1) * 1440 + int(data.minute_of_day)
+	for index in authored.size():
+		var record: Dictionary = migrated.contracts[index]
+		record.deadline_at_minute = -1
+		if record.is_playable and (record.status == &"available" or record.status == &"active"):
+			record.deadline_at_minute = saved_minute + int(authored[index].deadline_window_minutes)
 	migrated.version = PROFILE_VERSION
 	return migrated
 
@@ -270,7 +293,10 @@ func _validate_profile(data: Dictionary) -> String:
 	for key in _profile_payload().keys():
 		if not data.has(key):
 			return "profile is missing '%s'" % key
-	if not _is_int_value(data.version) or int(data.version) != PROFILE_VERSION:
+	if not _is_int_value(data.version):
+		return "profile version is incompatible"
+	var profile_version := int(data.version)
+	if profile_version != 2 and profile_version != 3:
 		return "profile version is incompatible"
 	if not _is_int_value(data.credits) or data.credits < 0:
 		return "profile Credits are invalid"
@@ -292,7 +318,8 @@ func _validate_profile(data: Dictionary) -> String:
 		return "profile favor state is invalid"
 	if not _validate_contact_standing(data.contact_standing):
 		return "profile contact standing is invalid"
-	var contract_reason := _validate_contracts(data.contracts, StringName(str(data.active_contract_id)))
+	var contract_reason := _validate_contracts(data.contracts,
+		StringName(str(data.active_contract_id)), profile_version)
 	if not contract_reason.is_empty():
 		return contract_reason
 	if typeof(data.messages) != TYPE_ARRAY:
@@ -307,7 +334,7 @@ func _validate_profile(data: Dictionary) -> String:
 		return "profile housing state is invalid"
 	return ""
 
-func _validate_contracts(raw_contracts: Variant, active_id: StringName) -> String:
+func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_version: int) -> String:
 	if typeof(raw_contracts) != TYPE_ARRAY:
 		return "profile contracts are invalid"
 	var authored := ContractCatalog.all()
@@ -323,8 +350,11 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName) -> Strin
 			return "profile contract IDs are invalid"
 		if typeof(record.get("is_playable", null)) != TYPE_BOOL:
 			return "profile contract unlocks are invalid"
+		var valid_statuses := [&"available", &"active", &"completed", &"failed"]
+		if profile_version == 3:
+			valid_statuses.append(&"expired")
 		if not _is_string_value(record.get("status", null)) \
-				or not [&"available", &"active", &"completed", &"failed"].has(StringName(str(record.status))):
+				or not valid_statuses.has(StringName(str(record.status))):
 			return "profile contract status is invalid"
 		if not _is_string_value(record.get("phase", null)) \
 				or not [&"offer", &"ready_to_proceed", &"customs_hold", &"resolved"].has(StringName(str(record.phase))):
@@ -333,8 +363,26 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName) -> Strin
 			return "profile contract resolution is invalid"
 		var status := StringName(str(record.status))
 		var phase := StringName(str(record.phase))
+		if profile_version == 3:
+			if not _is_int_value(record.get("deadline_at_minute", null)):
+				return "profile contract deadline is invalid"
+			var cutoff := int(record.deadline_at_minute)
+			if cutoff < -1:
+				return "profile contract deadline is invalid"
+			if not record.is_playable and cutoff != -1:
+				return "profile unpublished contract deadline is invalid"
+			if record.is_playable and (status == &"available" or status == &"active") and cutoff < 0:
+				return "profile published contract deadline is missing"
+			if record.resolution_id == &"deadline_missed":
+				if not record.is_playable or cutoff < 0 or phase != &"resolved" \
+						or (status != &"expired" and status != &"failed"):
+					return "profile deadline outcome is invalid"
+			elif status == &"expired":
+				return "profile expired contract reason is invalid"
 		if status == &"active":
 			active_count += 1
+			if not record.is_playable or active_id != authored[index].id:
+				return "profile active contract state is invalid"
 			if phase != &"ready_to_proceed" and phase != &"customs_hold":
 				return "profile active contract state is invalid"
 			if record.resolution_id != &"":
@@ -342,9 +390,17 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName) -> Strin
 		elif status == &"available":
 			if phase != &"offer" or record.resolution_id != &"":
 				return "profile contract state is invalid"
-		elif (status == &"completed" or status == &"failed"):
+		elif status == &"completed" or status == &"failed" or status == &"expired":
 			if phase != &"resolved" or record.resolution_id == &"":
 				return "profile terminal contract state is invalid"
+			if status != &"expired" and record.resolution_id == &"deadline_missed":
+				if profile_version != 3:
+					return "profile deadline outcome is invalid"
+			elif status != &"expired":
+				var choice := _choice(authored[index].complication.choices,
+					StringName(str(record.resolution_id)))
+				if choice.is_empty() or choice.terminal_status != status:
+					return "profile terminal contract resolution is invalid"
 	if active_count > 1 or (active_count == 0 and active_id != &"") or (active_count == 1 and active_id == &""):
 		return "profile active contract state is invalid"
 	if active_id != &"" and not authored.any(func(contract: Dictionary) -> bool: return contract.id == active_id):
@@ -418,7 +474,7 @@ func _apply_profile(data: Dictionary) -> void:
 	var restored_contracts: Array[Dictionary] = ContractCatalog.all()
 	for index in restored_contracts.size():
 		var record: Dictionary = data.contracts[index]
-		for key in [&"is_playable", &"status", &"phase", &"resolution_id"]:
+		for key in [&"is_playable", &"status", &"phase", &"resolution_id", &"deadline_at_minute"]:
 			restored_contracts[index][key] = record[key]
 	contracts = restored_contracts
 	var restored_messages: Array[Dictionary] = []

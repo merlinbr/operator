@@ -47,6 +47,7 @@ func _run() -> void:
 	clean.rent_status = &"due"
 	clean.mara_favor_owed = true
 	clean.messages.append({"id": &"msg_saved", "sender": "TEST", "preview": "saved", "unread": false})
+	clean.contracts[0].deadline_at_minute = clean.current_minute() + int(clean.contracts[0].deadline_window_minutes)
 	check(clean.accept_contract(&"cold_chain_delivery"), "contract mutation setup succeeds")
 	check(clean.save_profile(), "profile saves")
 
@@ -72,16 +73,6 @@ func _run() -> void:
 		and restored.get_contract(&"cold_chain_delivery").status == &"active"
 		and restored.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
 		"active contract record restores")
-	var legacy: Dictionary = restored._profile_payload()
-	legacy.version = 1
-	legacy.erase("contact_standing")
-	legacy.contracts = legacy.contracts.slice(0, 3)
-	var migrated := restored._migrate_v1_profile(legacy)
-	check(migrated.version == 2 and migrated.contracts.size() == 7
-		and migrated.credits == restored.credits
-		and migrated.contact_standing[&"mara"] == 1
-		and migrated.contact_standing[&"vesper_clinic"] == 0,
-		"version-1 profile migration preserves state and adds Contacts and contracts")
 	var stable := GameStateScript.new()
 	stable.credits = 24680
 	check(stable.save_profile(), "stable profile saves before replacement failure")
@@ -153,3 +144,118 @@ func _run() -> void:
 	clean.free()
 	restored.free()
 	recovered.free()
+	_test_deadline_round_trip()
+	_test_legacy_deadline_migration(1)
+	_test_legacy_deadline_migration(2)
+	_test_overdue_deadline_load()
+	_test_invalid_deadline_profile()
+
+func _write_deadline_profile(payload: Dictionary) -> void:
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	check(file != null, "deadline save fixture opens")
+	if file == null:
+		return
+	file.store_string(JSON.stringify(payload))
+	file.close()
+
+func _test_deadline_round_trip() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var original_due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
+	gs.advance_minutes(30)
+	check(gs.accept_contract(&"cold_chain_delivery"), "deadline round-trip accepts on time")
+	var restored := GameStateScript.new()
+	check(restored.load_profile(), "version-3 active profile loads")
+	check(restored.get_contract(&"cold_chain_delivery").deadline_at_minute == original_due,
+		"load retains remaining time rather than assigning a new window")
+	restored.advance_minutes(original_due - restored.current_minute())
+	var again := GameStateScript.new()
+	check(again.load_profile()
+		and again.get_contract(&"cold_chain_delivery").resolution_id == &"deadline_missed"
+		and again.get_contract(&"cold_chain_delivery").status == &"failed"
+		and again.active_contract_id == &"",
+		"deadline failure round-trips without resurrection")
+	again.reset_profile()
+	gs.free()
+	restored.free()
+	again.free()
+
+func _test_legacy_deadline_migration(version: int) -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery"), "legacy fixture has an active job")
+	var payload: Dictionary = gs._profile_payload()
+	payload.version = version
+	payload.day = 27
+	payload.minute_of_day = 321
+	payload.credits = 98765
+	for c: Dictionary in payload.contracts:
+		c.erase("deadline_at_minute")
+	if version == 1:
+		payload.erase("contact_standing")
+		payload.contracts = payload.contracts.filter(func(c: Dictionary) -> bool:
+			return c.id in [&"cold_chain_delivery", &"data_retrieval", &"clinic_asset_recovery"])
+	_write_deadline_profile(payload)
+	var restored := GameStateScript.new()
+	check(restored.load_profile(), "legacy profile migrates through the load path")
+	var c: Dictionary = restored.get_contract(&"cold_chain_delivery")
+	check(restored.day == 27 and restored.minute_of_day == 321 and restored.credits == 98765
+		and c.status == &"active" and c.deadline_at_minute == restored.current_minute() + c.deadline_window_minutes,
+		"legacy job receives one full window without losing progress")
+	var migrated_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var persisted: Dictionary = JSON.parse_string(migrated_file.get_as_text())
+	migrated_file.close()
+	check(persisted.version == 3, "migration is persisted immediately")
+	restored.advance_minutes(1)
+	var again := GameStateScript.new()
+	check(again.load_profile() and again.get_contract(&"cold_chain_delivery").deadline_at_minute == c.deadline_at_minute,
+		"subsequent load does not renew the migrated window")
+	again.reset_profile()
+	gs.free()
+	restored.free()
+	again.free()
+
+func _test_overdue_deadline_load() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
+	var payload: Dictionary = gs._profile_payload()
+	var saved_time: int = due + 361
+	payload.day = saved_time / 1440 + 1
+	payload.minute_of_day = saved_time % 1440
+	_write_deadline_profile(payload)
+	var restored := GameStateScript.new()
+	check(restored.load_profile(), "valid overdue current-version profile loads")
+	check(restored.current_minute() == saved_time and restored.credits == gs.credits
+		and restored.get_contract(&"cold_chain_delivery").status == &"expired"
+		and restored.get_contract(&"data_retrieval").status == &"expired",
+		"load reconciles historical cutoffs without advancing the clock or charging rent")
+	var count: int = restored.messages.size()
+	var again := GameStateScript.new()
+	check(again.load_profile() and again.messages.size() == count,
+		"repeated load neither replays messages nor republishes successors")
+	again.reset_profile()
+	gs.free()
+	restored.free()
+	again.free()
+
+func _test_invalid_deadline_profile() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var payload: Dictionary = gs._profile_payload()
+	payload.credits = 98765
+	payload.contracts[0].deadline_at_minute = "tomorrow"
+	_write_deadline_profile(payload)
+	var restored := GameStateScript.new()
+	check(not restored.load_profile() and restored.credits == restored.START_CREDITS,
+		"malformed cutoff follows existing invalid-profile recovery")
+	restored.reset_profile()
+	payload = restored._profile_payload()
+	payload.contracts[0].status = &"completed"
+	payload.contracts[0].phase = &"resolved"
+	payload.contracts[0].resolution_id = &"deadline_missed"
+	_write_deadline_profile(payload)
+	check(not restored.load_profile(), "deadline-missed cannot be a successful completion")
+	restored.reset_profile()
+	gs.free()
+	restored.free()
