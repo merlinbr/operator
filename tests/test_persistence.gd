@@ -149,6 +149,11 @@ func _run() -> void:
 	_test_legacy_deadline_migration(2)
 	_test_overdue_deadline_load()
 	_test_invalid_deadline_profile()
+	_test_preparation_round_trip()
+	_test_v3_preparation_migration()
+	_test_prepared_overdue_load()
+	_test_invalid_preparation_profiles()
+	_test_preparation_save_failure()
 
 func _write_deadline_profile(payload: Dictionary) -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -165,7 +170,7 @@ func _test_deadline_round_trip() -> void:
 	gs.advance_minutes(30)
 	check(gs.accept_contract(&"cold_chain_delivery"), "deadline round-trip accepts on time")
 	var restored := GameStateScript.new()
-	check(restored.load_profile(), "version-3 active profile loads")
+	check(restored.load_profile(), "current-version active profile loads")
 	check(restored.get_contract(&"cold_chain_delivery").deadline_at_minute == original_due,
 		"load retains remaining time rather than assigning a new window")
 	restored.advance_minutes(original_due - restored.current_minute())
@@ -191,6 +196,7 @@ func _test_legacy_deadline_migration(version: int) -> void:
 	payload.credits = 98765
 	for c: Dictionary in payload.contracts:
 		c.erase("deadline_at_minute")
+		c.erase("prep_paid_credits")
 	if version == 1:
 		payload.erase("contact_standing")
 		payload.contracts = payload.contracts.filter(func(c: Dictionary) -> bool:
@@ -205,7 +211,8 @@ func _test_legacy_deadline_migration(version: int) -> void:
 	var migrated_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	var persisted: Dictionary = JSON.parse_string(migrated_file.get_as_text())
 	migrated_file.close()
-	check(persisted.version == 3, "migration is persisted immediately")
+	check(persisted.version == 4 and persisted.contracts[0].prep_paid_credits == 0,
+		"legacy migration persists the complete current schema without charging preparation")
 	restored.advance_minutes(1)
 	var again := GameStateScript.new()
 	check(again.load_profile() and again.get_contract(&"cold_chain_delivery").deadline_at_minute == c.deadline_at_minute,
@@ -256,6 +263,180 @@ func _test_invalid_deadline_profile() -> void:
 	payload.contracts[0].resolution_id = &"deadline_missed"
 	_write_deadline_profile(payload)
 	check(not restored.load_profile(), "deadline-missed cannot be a successful completion")
+	restored.reset_profile()
+	gs.free()
+	restored.free()
+
+func _test_preparation_round_trip() -> void:
+	for outcome: StringName in [&"precleared_documents", &"pay_fee", &"abort"]:
+		var gs := GameStateScript.new()
+		gs.reset_profile()
+		gs.mara_favor_owed = true
+		check(gs.accept_contract(&"cold_chain_delivery")
+			and gs.prepare_contract(&"cold_chain_delivery"), "round-trip purchases preparation")
+		var due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
+		var after_purchase: int = gs.credits
+		var restored := GameStateScript.new()
+		check(restored.load_profile() and restored.credits == after_purchase,
+			"ready purchase reloads without another debit")
+		var c: Dictionary = restored.get_contract(&"cold_chain_delivery")
+		check(c.prep_paid_credits == 300 and c.deadline_at_minute == due
+			and c.complication.choices.any(func(choice: Dictionary) -> bool:
+				return choice.id == &"precleared_documents"),
+			"reload retains cost, cutoff and unlocked response")
+		check(not restored.prepare_contract(c.id) and restored.credits == after_purchase,
+			"reload cannot purchase twice")
+		check(restored.proceed_contract(c.id) and restored.resolve_contract(c.id, outcome),
+			"restored job can use prepared or basic outcome")
+		var result_credits: int = restored.credits
+		var again := GameStateScript.new()
+		check(again.load_profile() and again.credits == result_credits
+			and again.get_contract(c.id).prep_paid_credits == 300
+			and again.get_contract(c.id).resolution_id == outcome and again.mara_favor_owed,
+			"terminal reload preserves spent preparation and existing debt")
+		again.reset_profile()
+		gs.free()
+		restored.free()
+		again.free()
+
+func _test_v3_preparation_migration() -> void:
+	for at_complication: bool in [false, true]:
+		var gs := GameStateScript.new()
+		gs.reset_profile()
+		gs.mara_favor_owed = true
+		check(gs.accept_contract(&"cold_chain_delivery"), "version-3 fixture accepts on time")
+		if at_complication:
+			check(gs.proceed_contract(&"cold_chain_delivery"), "legacy fixture departs unprepared")
+		var payload: Dictionary = gs._profile_payload()
+		payload.version = 3
+		for record: Dictionary in payload.contracts:
+			record.erase("prep_paid_credits")
+		var clock: int = gs.current_minute()
+		var due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
+		_write_deadline_profile(payload)
+		var restored := GameStateScript.new()
+		check(restored.load_profile() and restored.current_minute() == clock
+			and restored.credits == gs.credits and restored.mara_favor_owed
+			and restored.get_contract(&"cold_chain_delivery").deadline_at_minute == due
+			and restored.get_contract(&"cold_chain_delivery").prep_paid_credits == 0,
+			"version-3 migration preserves progress and does not renew the cutoff")
+		var persisted_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+		var persisted: Dictionary = JSON.parse_string(persisted_file.get_as_text())
+		persisted_file.close()
+		check(persisted.version == 4 and persisted.contracts[0].prep_paid_credits == 0,
+			"migration writes the new on-disk schema immediately")
+		var again := GameStateScript.new()
+		check(again.load_profile()
+			and again.get_contract(&"cold_chain_delivery").deadline_at_minute == due,
+			"subsequent load preserves remaining time")
+		if at_complication:
+			check(not again.prepare_contract(&"cold_chain_delivery"),
+				"legacy departed job cannot prepare retroactively")
+		else:
+			check(again.prepare_contract(&"cold_chain_delivery"),
+				"legacy ready job may purchase after migration")
+		again.reset_profile()
+		gs.free()
+		restored.free()
+		again.free()
+
+func _test_prepared_overdue_load() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.prepare_contract(&"cold_chain_delivery"), "overdue fixture purchases preparation")
+	var payload: Dictionary = gs._profile_payload()
+	var due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
+	payload.day = floori(float(due) / 1440.0) + 1
+	payload.minute_of_day = due % 1440
+	_write_deadline_profile(payload)
+	var restored := GameStateScript.new()
+	check(restored.load_profile() and restored.credits == gs.credits
+		and restored.get_contract(&"cold_chain_delivery").resolution_id == &"deadline_missed"
+		and restored.get_contract(&"cold_chain_delivery").prep_paid_credits == 300
+		and restored.active_contract_id == &"", "overdue load fails the job without refund")
+	var messages: int = restored.messages.size()
+	var again := GameStateScript.new()
+	check(again.load_profile() and again.messages.size() == messages
+		and again.credits == gs.credits
+		and again.get_contract(&"cold_chain_delivery").prep_paid_credits == 300,
+		"repeated overdue load retains sunk cost without replay")
+	again.reset_profile()
+	gs.free()
+	restored.free()
+	again.free()
+
+func _test_invalid_preparation_profiles() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery"), "invalid fixtures start from active state")
+	var valid: Dictionary = gs._profile_payload()
+	var cases: Array[Dictionary] = []
+	for bad: Variant in [null, -1, 0.5, "300", true]:
+		var invalid: Dictionary = valid.duplicate(true)
+		if bad == null:
+			invalid.contracts[0].erase("prep_paid_credits")
+		else:
+			invalid.contracts[0].prep_paid_credits = bad
+		cases.append(invalid)
+	var unaccepted: Dictionary = valid.duplicate(true)
+	unaccepted.active_contract_id = ""
+	unaccepted.contracts[0].status = "available"
+	unaccepted.contracts[0].phase = "offer"
+	unaccepted.contracts[0].prep_paid_credits = 300
+	cases.append(unaccepted)
+	var unsupported: Dictionary = valid.duplicate(true)
+	unsupported.contracts[2].prep_paid_credits = 300
+	cases.append(unsupported)
+	var unpaid_result: Dictionary = valid.duplicate(true)
+	unpaid_result.active_contract_id = ""
+	unpaid_result.contracts[0].status = "completed"
+	unpaid_result.contracts[0].phase = "resolved"
+	unpaid_result.contracts[0].resolution_id = "precleared_documents"
+	cases.append(unpaid_result)
+	for version: int in [2, 3]:
+		var legacy_result: Dictionary = unpaid_result.duplicate(true)
+		legacy_result.version = version
+		cases.append(legacy_result)
+	for invalid: Dictionary in cases:
+		gs.reset_profile() # remove alternate candidates before corrupting the primary
+		_write_deadline_profile(invalid)
+		var restored := GameStateScript.new()
+		check(not restored.load_profile(), "invalid paid amount or impossible purchase is rejected")
+		restored.free()
+	# A historical price differs from today's catalog but remains valid.
+	gs.reset_profile()
+	var historical: Dictionary = valid.duplicate(true)
+	historical.contracts[0].prep_paid_credits = 275
+	historical.contracts[0].preparation.cost_credits = 1
+	_write_deadline_profile(historical)
+	var restored := GameStateScript.new()
+	check(restored.load_profile()
+		and restored.get_contract(&"cold_chain_delivery").prep_paid_credits == 275
+		and restored.get_contract(&"cold_chain_delivery").preparation.cost_credits == 300,
+		"historical spending restores without trusting saved authored prices")
+	restored.reset_profile()
+	gs.free()
+	restored.free()
+
+func _test_preparation_save_failure() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery"), "save-failure fixture accepts delivery")
+	var before: int = gs.credits
+	var blocker := ProjectSettings.globalize_path(GameStateScript.PROFILE_BACKUP_PATH)
+	check(DirAccess.make_dir_absolute(blocker) == OK, "block atomic replacement")
+	check(gs.prepare_contract(&"cold_chain_delivery") and gs.credits == before - 300
+		and gs.get_contract(&"cold_chain_delivery").prep_paid_credits == 300,
+		"accepted purchase remains coherent when persistence reports failure")
+	check(not gs.prepare_contract(&"cold_chain_delivery") and gs.credits == before - 300,
+		"failed disk write does not make the purchase repeatable in memory")
+	check(DirAccess.remove_absolute(blocker) == OK, "remove only the deliberate blocker")
+	check(gs.save_profile(), "normal save can persist the existing purchase without repurchasing")
+	var restored := GameStateScript.new()
+	check(restored.load_profile() and restored.credits == before - 300
+		and restored.get_contract(&"cold_chain_delivery").prep_paid_credits == 300,
+		"save recovery retains the single debit")
 	restored.reset_profile()
 	gs.free()
 	restored.free()

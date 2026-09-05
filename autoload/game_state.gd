@@ -20,7 +20,7 @@ const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const PROFILE_PATH := "user://operator_save.json"
 const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
 const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
-const PROFILE_VERSION := 3
+const PROFILE_VERSION := 4
 
 signal contracts_changed
 signal contacts_changed
@@ -152,9 +152,13 @@ func load_profile() -> bool:
 		saw_profile = true
 		var parsed: Variant = _read_profile_candidate(path)
 		if parsed != null:
-			var migrated := int(parsed.version) == 2
-			if migrated:
+			var migrated := int(parsed.version) < PROFILE_VERSION
+			if int(parsed.version) == 2:
 				parsed = _migrate_v2_profile(parsed)
+				if not _validate_profile(parsed).is_empty():
+					continue
+			if int(parsed.version) == 3:
+				parsed = _migrate_v3_profile(parsed)
 				if not _validate_profile(parsed).is_empty():
 					continue
 			_apply_profile(parsed)
@@ -286,7 +290,14 @@ func _migrate_v2_profile(data: Dictionary) -> Dictionary:
 		record.deadline_at_minute = -1
 		if record.is_playable and (record.status == &"available" or record.status == &"active"):
 			record.deadline_at_minute = saved_minute + int(authored[index].deadline_window_minutes)
-	migrated.version = PROFILE_VERSION
+	migrated.version = 3
+	return migrated
+
+func _migrate_v3_profile(data: Dictionary) -> Dictionary:
+	var migrated := data.duplicate(true)
+	for record: Dictionary in migrated.contracts:
+		record.prep_paid_credits = 0
+	migrated.version = 4
 	return migrated
 
 func _validate_profile(data: Dictionary) -> String:
@@ -296,7 +307,7 @@ func _validate_profile(data: Dictionary) -> String:
 	if not _is_int_value(data.version):
 		return "profile version is incompatible"
 	var profile_version := int(data.version)
-	if profile_version != 2 and profile_version != 3:
+	if profile_version != 2 and profile_version != 3 and profile_version != 4:
 		return "profile version is incompatible"
 	if not _is_int_value(data.credits) or data.credits < 0:
 		return "profile Credits are invalid"
@@ -351,7 +362,7 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 		if typeof(record.get("is_playable", null)) != TYPE_BOOL:
 			return "profile contract unlocks are invalid"
 		var valid_statuses := [&"available", &"active", &"completed", &"failed"]
-		if profile_version == 3:
+		if profile_version >= 3:
 			valid_statuses.append(&"expired")
 		if not _is_string_value(record.get("status", null)) \
 				or not valid_statuses.has(StringName(str(record.status))):
@@ -363,7 +374,7 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 			return "profile contract resolution is invalid"
 		var status := StringName(str(record.status))
 		var phase := StringName(str(record.phase))
-		if profile_version == 3:
+		if profile_version >= 3:
 			if not _is_int_value(record.get("deadline_at_minute", null)):
 				return "profile contract deadline is invalid"
 			var cutoff := int(record.deadline_at_minute)
@@ -379,6 +390,16 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 					return "profile deadline outcome is invalid"
 			elif status == &"expired":
 				return "profile expired contract reason is invalid"
+		if profile_version == 4:
+			if not _is_int_value(record.get("prep_paid_credits", null)):
+				return "profile preparation spending is invalid"
+			var paid := int(record.prep_paid_credits)
+			if paid < 0:
+				return "profile preparation spending is invalid"
+			if paid > 0 and (not authored[index].has("preparation")
+					or not record.is_playable or int(record.deadline_at_minute) < 0
+					or (status != &"active" and status != &"completed" and status != &"failed")):
+				return "profile preparation state is invalid"
 		if status == &"active":
 			active_count += 1
 			if not record.is_playable or active_id != authored[index].id:
@@ -394,13 +415,18 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 			if phase != &"resolved" or record.resolution_id == &"":
 				return "profile terminal contract state is invalid"
 			if status != &"expired" and record.resolution_id == &"deadline_missed":
-				if profile_version != 3:
+				if profile_version < 3:
 					return "profile deadline outcome is invalid"
 			elif status != &"expired":
 				var choice := _choice(authored[index].complication.choices,
 					StringName(str(record.resolution_id)))
 				if choice.is_empty() or choice.terminal_status != status:
 					return "profile terminal contract resolution is invalid"
+				if choice.get("requires_prep", false):
+					if profile_version < 4:
+						return "profile legacy preparation outcome is invalid"
+					if int(record.prep_paid_credits) == 0:
+						return "profile preparation outcome is unpaid"
 	if active_count > 1 or (active_count == 0 and active_id != &"") or (active_count == 1 and active_id == &""):
 		return "profile active contract state is invalid"
 	if active_id != &"" and not authored.any(func(contract: Dictionary) -> bool: return contract.id == active_id):
@@ -474,7 +500,8 @@ func _apply_profile(data: Dictionary) -> void:
 	var restored_contracts: Array[Dictionary] = ContractCatalog.all()
 	for index in restored_contracts.size():
 		var record: Dictionary = data.contracts[index]
-		for key in [&"is_playable", &"status", &"phase", &"resolution_id", &"deadline_at_minute"]:
+		for key in [&"is_playable", &"status", &"phase", &"resolution_id",
+				&"deadline_at_minute", &"prep_paid_credits"]:
 			restored_contracts[index][key] = record[key]
 	contracts = restored_contracts
 	var restored_messages: Array[Dictionary] = []
