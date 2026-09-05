@@ -64,6 +64,16 @@ func _run() -> void:
 			"a newly published job permits an on-time journey")
 		check(not _choice(contract, &"abort").is_empty(),
 			"every deadline outcome has an authored successor route")
+		var prep_choices: Array = contract.complication.choices.filter(
+			func(choice: Dictionary) -> bool: return choice.get("requires_prep", false))
+		if contract.has("preparation"):
+			check(typeof(contract.preparation.cost_credits) == TYPE_INT
+				and contract.preparation.cost_credits > 0
+				and prep_choices.size() == 1
+				and prep_choices[0].id == contract.preparation.choice_id,
+				"purchasable preparation references exactly one gated response")
+		else:
+			check(prep_choices.is_empty(), "no inaccessible prepared responses on unsupported jobs")
 		for choice: Dictionary in contract.complication.choices:
 			check(choice.has("contact_standing_delta")
 				and int(choice.contact_standing_delta) >= 0

@@ -660,6 +660,9 @@ func get_contract(id: StringName) -> Dictionary:
 	if index < 0:
 		return {}
 	var snapshot: Dictionary = contracts[index].duplicate(true)
+	if snapshot.has("preparation"):
+		snapshot.preparation.choice = _choice(snapshot.complication.choices,
+			StringName(snapshot.preparation.choice_id))
 	if snapshot.has("complication"):
 		snapshot.complication.choices = _available_choices(contracts[index])
 	return snapshot
@@ -669,6 +672,8 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 	if not contract.has("complication"):
 		return available
 	for choice: Dictionary in contract.complication.choices:
+		if choice.get("requires_prep", false) and int(contract.prep_paid_credits) == 0:
+			continue
 		if choice.has("max_heat") and heat > int(choice.max_heat):
 			continue
 		if choice.has("min_heat") and heat < int(choice.min_heat):
@@ -769,6 +774,26 @@ func proceed_contract(id: StringName) -> bool:
 	push_ticker(contract.complication.title, true)
 	_add_message("MARA", contract.proceed_message)
 	contract_proceeded.emit(id)
+	save_profile()
+	return true
+
+func prepare_contract(id: StringName) -> bool:
+	var index := _contract_index(id)
+	if index < 0 or active_contract_id != id:
+		return false
+	var contract: Dictionary = contracts[index]
+	if contract.status != &"active" or contract.phase != &"ready_to_proceed" \
+			or _deadline_passed(contract) or not contract.has("preparation") \
+			or int(contract.prep_paid_credits) != 0:
+		return false
+	var cost := int(contract.preparation.cost_credits)
+	if credits < cost:
+		return false
+	contract.prep_paid_credits = cost
+	credits -= cost
+	contracts_changed.emit()
+	push_ticker("PREPARATION PURCHASED // %s // %s CR" % [
+		contract.code, format_credits(cost)], true)
 	save_profile()
 	return true
 
