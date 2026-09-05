@@ -167,6 +167,17 @@ func _run() -> void:
 		"accept cue is not replayed by refresh")
 	check(_button(context, "PROCEED TO DOCK 17") != null,
 		"ACCEPT refreshes detail to proceed")
+	var delivery: Dictionary = gs.get_contract(&"cold_chain_delivery")
+	var warning_minute: int = delivery.deadline_at_minute - int(delivery.proceed_minutes)
+	gs.day = warning_minute / 1440 + 1
+	gs.minute_of_day = warning_minute % 1440
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	check(_text(context).contains("WARNING")
+		and _button(context, "PROCEED TO DOCK 17") != null,
+		"clock refreshes the selected detail with late-arrival risk")
+	gs.day = gs.START_DAY
+	gs.minute_of_day = gs.START_MINUTE
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
 	_button(context, "PROCEED TO DOCK 17").pressed.emit()
 	check(contract_sfx.stream.resource_path == "res://assets/audio/ui/contract_proceeded.ogg",
 		"proceed maps to its SFX")
@@ -313,3 +324,9 @@ func _button(control: Control, text: String) -> Button:
 		if button.text == text:
 			return button
 	return null
+
+func _text(control: Control) -> String:
+	var out := ""
+	for label: Label in control.find_children("*", "Label", true, false):
+		out += label.text + "\n"
+	return out

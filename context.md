@@ -1,6 +1,6 @@
 # Project Context — Untitled Cyberpunk Operator RPG
 
-**Status:** Early design / pre-production
+**Status:** Early playable prototype
 **Engine:** Godot
 **Game type:** 2D, UI-heavy, single-player management / narrative RPG
 **Primary platform:** Desktop first
@@ -235,6 +235,8 @@ The game should prove that **choosing and executing contracts is fun** before ex
 - **Contact standing:** one-way progress with one Contact, displayed as **COLD**, **KNOWN**, or **TRUSTED**. It gates authored contracts; a resolution can raise standing but this slice never lowers it.
 - **Favor:** a discrete debt owed to Mara. It is separate from Contact standing and can unlock or alter a specific resolution.
 - **Contract:** an authored operation with one Contact, a minimum Contact-standing requirement, and a fixed event-sequence resolution. It is not a generated mission.
+- **Deadline:** a persistent absolute game-time cutoff assigned when a contract is first published. Acceptance and reload do not renew it.
+- **Deadline miss:** an unaccepted published offer becomes `expired`; an active job becomes `failed`. Both use the `deadline_missed` runtime outcome.
 
 ## Open design questions
 
@@ -257,6 +259,13 @@ These are intentionally unresolved and should not be hard-coded yet:
 
 ## Current implementation boundary
 
-This document is **design context, not an implementation order**.
+The implemented prototype contains:
 
-Until the design is reviewed and approved, do not implement gameplay systems or make irreversible architecture decisions. A later implementation plan should define the Godot project structure and first vertical slice.
+- an in-world terminal shell and boot sequence;
+- persistent single-profile state for credits, Heat, clock, housing, contract progress, and Contact standing;
+- Studio and Loft apartment environments with time-reactive lighting, localized rain, subtle glints, lamp glow, and diffuse window-originated lightning;
+- seven deterministic authored contracts across Mara and the Vesper Clinic Coordinator, gated by Contact-local standing and resolved through interactive event sequences;
+- publication-relative contract deadlines: unaccepted offers expire and active jobs fail at their persistent cutoff; deadline outcomes publish the same successors as an abort without rewards or changes to Heat, standing, or favors;
+- a small housing loop: rest, rent, moving to the Loft, and Studio buyout.
+
+It intentionally does not contain combat, crew, inventory, market, map/travel, procedural contracts, a faction matrix, save slots, or simulation systems. New work should extend one proven player-facing loop rather than introduce a broad subsystem.

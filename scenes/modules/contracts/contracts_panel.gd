@@ -68,6 +68,8 @@ func _row_text(contract: Dictionary, gs: Node) -> String:
 			return "COMPLETED // " + contract.title
 		&"failed":
 			return "FAILED // " + contract.title
+		&"expired":
+			return "EXPIRED // " + contract.title
 		_:
 			return "%s   %s CR" % [contract.title, GameStateScript.format_credits(contract.reward_credits)]
 

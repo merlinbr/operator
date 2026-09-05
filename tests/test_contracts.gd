@@ -56,6 +56,14 @@ func _run() -> void:
 		buttons.append(child)
 	check(buttons[0].disabled and buttons[0].text.contains("FAILED"),
 		"failed C-1042 is disabled and visibly failed")
+	var expired_contracts: Array = gs.contracts.duplicate(true)
+	expired_contracts[0].status = &"expired"
+	panel.setup(gs, expired_contracts)
+	buttons = []
+	for child in panel.find_children("*", "Button", true, false):
+		buttons.append(child)
+	check(buttons[0].disabled and buttons[0].text.contains("EXPIRED // COLD-CHAIN DELIVERY"),
+		"expired C-1042 is disabled and visibly expired")
 	var detail := ContractDetail.instantiate()
 	root.add_child(detail)
 	var offer := gs.get_contract(&"cold_chain_delivery")
@@ -81,7 +89,8 @@ func _run() -> void:
 
 	detail.setup(gs, offer)
 	var offer_text := _text(detail)
-	check(offer_text.contains("DAY 15 // 04:00"), "offer shows the deadline")
+	check(offer_text.contains("DEADLINE    DAY"), "offer shows the calculated deadline")
+	check(offer_text.contains("EXECUTION   80 MIN"), "offer shows the execution duration")
 	check(_button(detail, "ACCEPT") != null, "offer shows ACCEPT")
 	check(_button(detail, "CLOSE") != null, "offer shows CLOSE")
 	check(_button(detail, "DECLINE") == null, "offer does not show DECLINE")
@@ -192,6 +201,22 @@ func _run() -> void:
 	detail.setup(favor_gs, favor_gs.get_contract(&"clinic_asset_recovery"))
 	check(_button(detail, "SETTLE MARA'S FAVOR // HAND DELIVERY") != null,
 		"favor-owed R-311 renders the settlement action")
+
+	var late_gs := GameStateScript.new()
+	var late: Dictionary = late_gs.get_contract(&"cold_chain_delivery")
+	late_gs.advance_minutes(late.deadline_at_minute - late_gs.current_minute() - late.proceed_minutes)
+	check(late_gs.accept_contract(late.id), "late UI scenario accepts on time")
+	detail.setup(late_gs, late_gs.get_contract(late.id))
+	check(_text(detail).contains("WARNING") and _button(detail, "PROCEED TO DOCK 17") != null,
+		"late-arrival risk is visible while proceeding remains a player choice")
+	check(late_gs.proceed_contract(late.id), "late UI journey advances time")
+	detail.setup(late_gs, late_gs.get_contract(late.id))
+	check(_text(detail).contains("DEADLINE MISSED")
+		and _button(detail, "ACKNOWLEDGE") != null
+		and _button(detail, "PROCEED TO DOCK 17") == null
+		and _button(detail, "PAY CLEARANCE FEE // 250 CR") == null,
+		"deadline result explains failure and removes stale gameplay actions")
+	late_gs.free()
 	portfolio_gs.free()
 	favor_gs.free()
 	detail.queue_free()

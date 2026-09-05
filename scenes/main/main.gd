@@ -108,6 +108,10 @@ func _build_shell() -> void:
 	_build_ticker()
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
 	gs.contracts_changed.connect(_on_contracts_changed)
+	gs.clock_changed.connect(func(_day: int, _minute: int) -> void:
+		if gs.active_module == &"contracts" and gs.module_open \
+				and _selected_contract_id != &"" and context_host.get_child_count() > 0:
+			context_host.get_child(0).setup(gs, gs.get_contract(_selected_contract_id)))
 	gs.contacts_changed.connect(_on_contacts_changed)
 	gs.contract_accepted.connect(_on_contract_accepted)
 	gs.contract_proceeded.connect(_on_contract_proceeded)

@@ -2,7 +2,9 @@
 
 A cyberpunk operations RPG — build a life and an organization as an independent operator in a dystopian corporate society.
 
-> **Status:** early prototype. The current build contains the navigable operations-terminal shell, a Tier 1 apartment environment, a deterministic three-contract early-game portfolio, and a persistent single-profile save. It has no simulation, combat, or procedural content systems.
+> **Status:** early playable prototype. The current build contains the navigable operations-terminal shell, boot sequence, time-reactive Studio and Loft environments, a deterministic seven-contract early-game portfolio, publication-relative enforced deadlines with hard expiry/failure, contact standing, housing/rent progression, and a persistent single-profile save. It has no combat or procedural content systems.
+
+Published contracts have persistent game-time deadlines. Unaccepted offers expire; active jobs fail at the cutoff. Deadline outcomes publish the same successors as an abort without paying rewards or changing Heat, standing, or favors. The remaining window is saved; acceptance and reload do not renew it.
 
 ## About
 
@@ -12,6 +14,9 @@ This is a **UI-first** game: the interface is an in-world operations terminal, a
 
 See the design documents for the full vision:
 
+- [`docs/superpowers/specs/2026-09-05-contract-deadlines-design.md`](docs/superpowers/specs/2026-09-05-contract-deadlines-design.md) — publication-relative contract deadlines
+- [`docs/superpowers/specs/2026-08-31-contact-contract-progression-design.md`](docs/superpowers/specs/2026-08-31-contact-contract-progression-design.md) — Mara/Vesper contract progression and standing
+- [`docs/superpowers/specs/2026-08-31-lightning-room-illumination-design.md`](docs/superpowers/specs/2026-08-31-lightning-room-illumination-design.md) — diffuse window-originated lightning
 - [`docs/superpowers/specs/2026-08-26-first-contract-vertical-slice-design.md`](docs/superpowers/specs/2026-08-26-first-contract-vertical-slice-design.md) — first playable contract slice
 - [`docs/superpowers/specs/2026-08-28-early-contract-portfolio-design.md`](docs/superpowers/specs/2026-08-28-early-contract-portfolio-design.md) — three-contract early-game portfolio
 - [`docs/superpowers/specs/2026-08-24-terminal-shell-design.md`](docs/superpowers/specs/2026-08-24-terminal-shell-design.md) — Slice 0 design spec
@@ -39,7 +44,7 @@ Headless GDScript tests (no framework — a minimal `SceneTree` harness). Run on
 .\tests\run_test.ps1 test_game_state
 ```
 
-Test files: `test_smoke`, `test_boot`, `test_game_state`, `test_module_registry`, `test_theme`, `test_placeholder_data`, `test_status_chip`, `test_icon_rail`, `test_ticker_bar`, `test_panels_basic`, `test_contracts`, `test_main`. Each prints `RESULT: ALL PASSED` on success.
+Test files include focused coverage for boot, contracts, contract catalog, environment, game state, persistence, panels, main scene, theme, and UI components. Every suite prints `RESULT: ALL PASSED` on success; `.\tests\run_all.ps1` runs the complete set.
 
 ## Project structure
 
@@ -50,13 +55,14 @@ res://
   scenes/ui/         status chip, icon rail, ticker bar
   scenes/modules/    home, comms, contracts (+ contract detail)
   scripts/           module definitions + registry (data-driven rail)
-  resources/         operator theme, module registry
-  data/placeholder/  dummy contracts/messages (isolated, easy to replace)
-  assets/fonts/      JetBrains Mono
+  resources/         operator theme and module registry
+  data/contracts/    authored contract portfolio
+  data/contacts/     authored contact identities and standing labels
+  data/housing/      authored residence definitions
   tests/             headless tests + run_test.ps1
 ```
 
-Architecture notes: components receive `GameState` via `setup()` injection (never the autoload global); authored contract content lives in `data/contracts/contract_catalog.gd`, with mutable runtime state in `GameState`; the icon rail renders from `module_registry.tres` (add a module = add a definition + a scene, no rail-script edits).
+Architecture notes: components receive `GameState` via `setup()` injection (never the autoload global); authored contracts, contacts, and residences live in dedicated catalogs; `GameState` owns their mutable runtime state, single-profile persistence, and availability rules; the icon rail renders from `module_registry.tres` (add a module = add a definition + a scene, no rail-script edits).
 
 ## License
 
