@@ -245,6 +245,7 @@ func _on_contract_selected(contract_id: StringName) -> void:
 	detail.accept_requested.connect(_on_contract_accept)
 	detail.proceed_requested.connect(_on_contract_proceed)
 	detail.resolution_requested.connect(_on_contract_resolution)
+	detail.preparation_requested.connect(_on_contract_preparation)
 	detail.close_requested.connect(_close_contract_detail)
 	detail.acknowledge_requested.connect(_close_contract_detail)
 	open_context(detail)
@@ -252,6 +253,9 @@ func _on_contract_selected(contract_id: StringName) -> void:
 
 func _on_contract_accept(id: StringName) -> void:
 	gs.accept_contract(id)
+
+func _on_contract_preparation(id: StringName) -> void:
+	gs.prepare_contract(id)
 
 
 func _refresh_home() -> void:

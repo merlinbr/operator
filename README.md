@@ -6,6 +6,8 @@ A cyberpunk operations RPG — build a life and an organization as an independen
 
 Published contracts have persistent game-time deadlines. Unaccepted offers expire; active jobs fail at the cutoff. Deadline outcomes publish the same successors as an abort without paying rewards or changing Heat, standing, or favors. The remaining window is saved; acceptance and reload do not renew it.
 
+Cold-Chain Delivery and Data Retrieval offer optional preparation before departure. A one-time upfront payment unlocks an additional response without replacing basic options or advancing time. Preparation can trade Credits for a quiet, trust-earning route without creating a new favor debt. Spending is saved, is not refunded on abort or deadline failure, and is included in the contract's net result. Other contracts have no preparation purchase; faction reputation remains deferred.
+
 ## About
 
 The player is an independent operator trying to survive and grow inside a dark corporate society — legitimate trader, smuggler, bounty hunter, mercenary, fixer, or a mix. The core loop is *discover → evaluate → prepare → execute → react → resolve → progress*, played through an **interactive event-sequence** model rather than an action game.

@@ -2,6 +2,7 @@ extends PanelContainer
 ## Contract detail — shown in the context panel next to the list.
 
 const GameStateScript := preload("res://autoload/game_state.gd")
+const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const COLOR_ALERT := Color(1.0, 0.35294, 0.47059)
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392, 1)
 
@@ -10,6 +11,7 @@ signal proceed_requested(contract_id: StringName)
 signal resolution_requested(contract_id: StringName, choice_id: StringName)
 signal close_requested
 signal acknowledge_requested
+signal preparation_requested(contract_id: StringName)
 
 var _actions: VBoxContainer
 var _contract_id: StringName = &""
@@ -50,12 +52,13 @@ func _add_preview(text: String) -> void:
 	label.text = text
 	label.add_theme_color_override("font_color", COLOR_DIM)
 	_actions.add_child(label)
-func _add_action(text: String, callback: Callable) -> void:
+func _add_action(text: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.focus_mode = Control.FOCUS_NONE
 	button.pressed.connect(callback)
 	_actions.add_child(button)
+	return button
 
 func setup(gs: Node, data: Variant = null) -> void:
 	_build_children()
@@ -73,7 +76,7 @@ func setup(gs: Node, data: Variant = null) -> void:
 		&"ready_to_proceed":
 			_render_ready(gs, c)
 		&"customs_hold":
-			_render_customs(c)
+			_render_customs(gs, c)
 		&"resolved":
 			_render_resolved(c)
 
@@ -100,6 +103,7 @@ func _render_ready(gs: Node, c: Dictionary) -> void:
 		"STATUS      CARGO IN TRANSIT",
 	])
 	_render_timing_warning(gs, c)
+	_render_preparation(gs, c)
 	_add_action("PROCEED TO " + c.proceed_label,
 		func() -> void: proceed_requested.emit(_contract_id))
 	_add_action("CLOSE", func() -> void: close_requested.emit())
@@ -124,13 +128,19 @@ func _choice(c: Dictionary, choice_id: StringName) -> Dictionary:
 			return choice
 	return {}
 
-func _render_customs(c: Dictionary) -> void:
+func _render_customs(gs: Node, c: Dictionary) -> void:
 	_body.add_theme_color_override("font_color", COLOR_DIM)
 	_title.text = c.complication.title
 	_body.text = c.complication.body
 	for choice: Dictionary in c.complication.choices:
 		var choice_id: StringName = choice.id
-		_add_preview(choice.preview)
+		if choice.get("requires_prep", false):
+			_add_preview(_prepared_outcome_text(gs, c, choice, int(c.prep_paid_credits)))
+		else:
+			_add_preview(choice.preview)
+			if int(c.prep_paid_credits) > 0:
+				_add_preview("NET AFTER PREP %s CR" % _credit_delta_text(
+					int(choice.credit_delta) - int(c.prep_paid_credits)))
 		_add_action(choice.label, _emit_resolution.bind(choice_id))
 
 func _emit_resolution(choice_id: StringName) -> void:
@@ -149,6 +159,7 @@ func _render_resolved(c: Dictionary) -> void:
 		"CREDITS     " + _credit_delta_text(choice.credit_delta) + " CR",
 		"HEAT        %+d" % choice.heat_delta,
 	])
+	_append_preparation_accounting(c, int(choice.credit_delta))
 	_add_action("ACKNOWLEDGE", func() -> void: acknowledge_requested.emit())
 
 func _render_deadline_result(c: Dictionary) -> void:
@@ -161,7 +172,50 @@ func _render_deadline_result(c: Dictionary) -> void:
 		"CREDITS     +0 CR",
 		"HEAT        +0",
 	])
+	_append_preparation_accounting(c, 0)
 	_add_action("ACKNOWLEDGE", func() -> void: acknowledge_requested.emit())
+
+func _append_preparation_accounting(c: Dictionary, payout: int) -> void:
+	var paid := int(c.prep_paid_credits)
+	if paid == 0:
+		return
+	_body.text += "\nPREP PAID   -%s CR\nNET         %s CR" % [
+		GameStateScript.format_credits(paid), _credit_delta_text(payout - paid)]
+
+func _prepared_outcome_text(gs: Node, c: Dictionary, choice: Dictionary, paid: int) -> String:
+	var contact := ContactCatalog.by_id(c.contact_id)
+	var standing: int = gs.standing_for(c.contact_id)
+	var gain := mini(int(choice.contact_standing_delta), ContactCatalog.TRUSTED - standing)
+	var standing_text := "%s STANDING +%d" % [contact.display_name, gain]
+	if standing >= ContactCatalog.TRUSTED:
+		standing_text += " // ALREADY TRUSTED"
+	return "\n".join([
+		"PAYOUT %s CR // HEAT %+d" % [_credit_delta_text(int(choice.credit_delta)), int(choice.heat_delta)],
+		"NET AFTER PREP %s CR" % _credit_delta_text(int(choice.credit_delta) - paid),
+		standing_text,
+		"NO NEW FAVOR DEBT // EXISTING DEBT UNCHANGED",
+	])
+
+func _render_preparation(gs: Node, c: Dictionary) -> void:
+	if not c.has("preparation"):
+		return
+	var prep: Dictionary = c.preparation
+	var choice: Dictionary = prep.choice
+	var paid := int(c.prep_paid_credits)
+	var cost := int(prep.cost_credits)
+	if paid > 0:
+		_add_preview("PREPARATION PURCHASED // %s CR PAID\nUNLOCKED: %s" % [
+			GameStateScript.format_credits(paid), choice.label])
+		_add_preview(_prepared_outcome_text(gs, c, choice, paid))
+		return
+	_add_preview("OPTIONAL PREPARATION\nUNLOCKS: " + str(choice.label))
+	_add_preview(_prepared_outcome_text(gs, c, choice, cost))
+	_add_preview("PAY UPFRONT // NO TIME COST // NO REFUNDS\nBenefits apply only if you use the unlocked response.")
+	var button := _add_action(str(prep.label),
+		func() -> void: preparation_requested.emit(_contract_id))
+	button.disabled = gs.credits < cost or gs.current_minute() >= int(c.deadline_at_minute)
+	if gs.credits < cost:
+		_add_preview("INSUFFICIENT CREDITS // NEED %s CR" % GameStateScript.format_credits(cost))
 
 func _credit_delta_text(delta: int) -> String:
 	var sign := "+" if delta >= 0 else "-"

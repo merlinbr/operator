@@ -224,6 +224,8 @@ func _run() -> void:
 	panel.queue_free()
 	gs.queue_free()
 
+	_test_preparation_result_ui()
+
 func _text(control: Control) -> String:
 	var out := ""
 	for label: Label in control.find_children("*", "Label", true, false):
@@ -235,3 +237,27 @@ func _button(control: Control, text: String) -> Button:
 		if button.text == text:
 			return button
 	return null
+
+func _test_preparation_result_ui() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.prepare_contract(&"cold_chain_delivery"), "paid UI fixture purchases clearance")
+	var detail := ContractDetail.instantiate()
+	detail.setup(gs, gs.get_contract(&"cold_chain_delivery"))
+	check(_button(detail, "ARRANGE INDEPENDENT CLEARANCE // 300 CR") == null
+		and _button(detail, "PROCEED TO DOCK 17") != null,
+		"purchased view removes buying but retains travel")
+	var c: Dictionary = gs.get_contract(&"cold_chain_delivery")
+	gs.advance_minutes(c.deadline_at_minute - gs.current_minute() - c.proceed_minutes)
+	check(gs.proceed_contract(c.id), "late purchased journey advances")
+	detail.setup(gs, gs.get_contract(c.id))
+	var text := _text(detail)
+	check(text.contains("DEADLINE MISSED") and text.contains("-300 CR")
+		and _button(detail, "ACKNOWLEDGE") != null
+		and _button(detail, "SUBMIT PRE-CLEARED CARGO DOCUMENTS") == null
+		and _button(detail, "PROCEED TO DOCK 17") == null,
+		"deadline result retains sunk cost and removes stale purchased actions")
+	detail.free()
+	gs.reset_profile()
+	gs.free()
