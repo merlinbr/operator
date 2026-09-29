@@ -1,0 +1,31 @@
+# Active Heat Design
+
+## Goal and status
+
+Make risky contract resolutions carry a legible, recoverable cost in the existing seven-contract, game-time-driven prototype. The player approved authored contract pressure, a 24-hour Go to Ground action that removes one Heat, and removal of the unused Alerts field/button. This is the design for a future implementation, not a claim that it has shipped. Review this written spec before creating the implementation plan.
+
+## Player rules
+
+- Heat begins at 2, remains a nonnegative integer, and continues to increase only when an authored contract response says so. No automatic decay; ordinary Rest does not reduce Heat.
+- When a resolution raises Heat across 3, 6, or 9, publish one distinct SYSTEM message and highlighted ticker warning for each newly crossed threshold, in ascending order. A jump across two thresholds produces both. A decrease and reload produce none; crossing a threshold again after recovery can warn again. The existing contract-resolution feedback remains intact. At 9+ the label stays CRITICAL; there is no Heat cap or ongoing timed event.
+- The three warning bands are ELEVATED (3–5), WATCHED (6–8), and CRITICAL (9+). Below 3 is LOW. These are labels derived from Heat, not another saved meter. Warnings describe surveillance pressure; they do not imply a sweep, raid, credit penalty, or forced relocation.
+- Existing Data Retrieval eligibility remains: `spoof_credentials` at Heat <=3; `routed_vendor_id` at Heat >=4. Prepared work order and always-available responses keep their current rules. Choice visibility and direct resolution requests must agree.
+- On Silent Partner (`silent_partner` / M-613), `buy_silence` (pay 900 from the 5,600-CR reward, receive 4,700 CR, Heat +0) is available only at Heat <=5. At Heat >=6 it is replaced by an authored `buy_intermediary_silence` response: pay 1,300 from the reward, receive 4,300 CR, Heat +0, same completed status and no standing/favor changes or successor unlocks. Its preview/result/message explain that elevated scrutiny requires an intermediary. `mirror_archive` (+5,600 CR, Heat +2) and `abort` remain available at every Heat. This is a price tradeoff in authored content, not a global price multiplier. No other contract options or outcomes change.
+- Home offers **GO TO GROUND // 24 HOURS // HEAT -1** only if Heat >0 and no contract is active. One action advances exactly 1,440 game minutes, using the normal clock/deadline/rent settlement, then lowers Heat by exactly one and saves. It costs no Credits directly, grants no standing or favor, does not move the residence, and never refunds lost opportunities. It works with due/overdue rent; housing does not provide a free Heat bonus. Reject the action without any mutation when Heat is zero or a contract is active. Existing Rest retains its midnight behavior and active-contract restriction.
+- Home shows the exact Heat number and derived exposure band beside the Go to Ground action and states the time/Heat tradeoff. The button is disabled when unusable and hidden during a residence confirmation. No new panel, modal, or status-chip overhaul.
+- Remove the inert Alerts rail item and its automatic separator, Home count, GameState signal/state, and serialized field. Heat is the only pressure measure. No Alerts scene is introduced.
+
+## State and data flow
+
+- `GameState` remains the only mutable owner. A successful contract resolution records the authored Heat delta and publishes threshold feedback on upward crossings. The existing `heat_changed`, `messages_changed`, and `ticker_message` signals drive Home, Comms, and ticker. Comms must update while it is open when a new message arrives; no message threading or read interaction is added.
+- `get_contract()` continues returning filtered choice snapshots via `_available_choices()`; `resolve_contract()` enforces that same filtered choice set, including the new Silent Partner thresholds. The contract detail UI renders the authored previews without computing prices.
+- Go to Ground is an intent from Home through Main to a guarded `GameState` action. Advance game time first through `_advance_minutes(1440)`, allowing exact existing deadline and rent outcomes, then reduce Heat by one, publish a recovery ticker/SYSTEM message, and save once. The action is unavailable with an active job, so it cannot bypass a live contract's deadline, but unaccepted published offers may expire during it.
+- Existing profile version 4 (and supported earlier migrations) continues to load. Ignore a legacy `alerts` key when present; new saves omit it. Since this removes an unused field and adds no required persisted field, no version bump is needed. If a legacy profile names `alerts` as its active module, normalize it to `home` when loading; other saved module IDs retain their current handling. Persist Heat, messages, clock, contracts, and rent exactly as before. Loading must not re-emit threshold warnings or deduct Heat.
+
+## Checks and boundaries
+
+- Exercise 2→4, 5→7, and 8→10 crossings; each emits only the bands newly crossed, and save/reload does not replay warnings. Lowering and re-crossing a band emits it again. No emission at unchanged or falling Heat.
+- At Heat 5 versus 6, inspect Silent Partner choices and outcome previews; direct requests for the hidden option fail without mutation. The high-Heat alternative pays exactly 4,300 CR with no Heat, standing, or favor change; other responses still work.
+- Go to Ground advances exactly 24 hours even if started one minute before midnight, settles rent and offer deadlines consistently with ordinary time advancement, reduces Heat once, and persists. Active-contract and zero-Heat attempts change nothing. Rest does not lower Heat.
+- Load a prior profile containing `alerts` (including one with active module `alerts`), retain all gameplay data, and save without `alerts`. Check the rail has no dead Alerts button and Comms refreshes after a warning while already open.
+- No raids, sweeps, random rolls, persistent alert level, new contract phases, generic repricing, new housing tiers, extra favors, new audio assets, or map/district simulation. Existing deadline failures still apply no Heat penalty; warning feedback does not alter deadlines or payouts.
