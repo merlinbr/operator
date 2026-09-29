@@ -36,7 +36,6 @@ func _run() -> void:
 	clean.day = 27
 	clean.minute_of_day = 321
 	clean.heat = 6
-	clean.alerts = 4
 	clean.workspace_collapsed = true
 	clean.active_module = &"contracts"
 	clean.module_open = true
@@ -50,12 +49,16 @@ func _run() -> void:
 	clean.contracts[0].deadline_at_minute = clean.current_minute() + int(clean.contracts[0].deadline_window_minutes)
 	check(clean.accept_contract(&"cold_chain_delivery"), "contract mutation setup succeeds")
 	check(clean.save_profile(), "profile saves")
+	var saved_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var saved_payload: Dictionary = JSON.parse_string(saved_file.get_as_text())
+	saved_file.close()
+	check(not saved_payload.has("alerts"), "new profiles omit the inert Alerts field")
 
 	var restored := GameStateScript.new()
 	check(restored.load_profile(), "profile loads")
 	check(restored.credits == 98765 and restored.district == "SECTOR 9"
 		and restored.day == 27 and restored.minute_of_day == 321
-		and restored.heat == 6 and restored.alerts == 4,
+		and restored.heat == 6,
 		"scalar gameplay fields restore")
 	check(restored.workspace_collapsed and restored.active_module == &"contracts"
 		and restored.module_open and restored.mara_favor_owed,
@@ -73,6 +76,27 @@ func _run() -> void:
 		and restored.get_contract(&"cold_chain_delivery").status == &"active"
 		and restored.get_contract(&"cold_chain_delivery").phase == &"ready_to_proceed",
 		"active contract record restores")
+
+	var legacy_alerts_payload: Dictionary = clean._profile_payload()
+	legacy_alerts_payload["alerts"] = 4
+	legacy_alerts_payload.active_module = &"alerts"
+	var legacy_file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	check(legacy_file != null, "legacy Alerts fixture opens")
+	if legacy_file != null:
+		legacy_file.store_string(JSON.stringify(legacy_alerts_payload))
+		legacy_file.close()
+	var legacy_restored := GameStateScript.new()
+	check(legacy_restored.load_profile() and legacy_restored.heat == 6
+		and legacy_restored.active_module == &"home",
+		"legacy v4 Alerts field loads and normalizes the module to Home")
+	check(legacy_restored.save_profile(), "legacy Alerts profile saves in the current schema")
+	var normalized_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var normalized_payload: Dictionary = JSON.parse_string(normalized_file.get_as_text())
+	normalized_file.close()
+	check(not normalized_payload.has("alerts") and normalized_payload.active_module == "home",
+		"normalized profile removes the legacy Alerts field")
+	legacy_restored.reset_profile()
+	legacy_restored.free()
 	var stable := GameStateScript.new()
 	stable.credits = 24680
 	check(stable.save_profile(), "stable profile saves before replacement failure")

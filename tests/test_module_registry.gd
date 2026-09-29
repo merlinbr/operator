@@ -16,10 +16,11 @@ func _run() -> void:
 
 	var order := reg.rail_order()
 	var ids: Array = order.map(func(m: ModuleDef) -> StringName: return m.id)
-	check(ids == ([&"home", &"comms", &"contracts", &"crew", &"market", &"map", &"alerts"] as Array),
-		"rail order is core, operational, utility — got %s" % [ids])
-	check(order[0].group == &"core" and order[6].group == &"utility", "groups ordered core→utility")
-	check(reg.get_module(&"alerts").group == &"utility", "alerts is utility group")
+	check(ids == ([&"home", &"comms", &"contracts", &"crew", &"market", &"map"] as Array),
+		"rail order is core then operational — got %s" % [ids])
+	check(order[0].group == &"core" and order[3].group == &"operational"
+		and order[5].group == &"operational", "groups ordered core→operational")
+	check(reg.get_module(&"alerts") == null, "Alerts module is absent")
 	var home2 := reg.get_module(&"home")
 	check(home2.size_class == &"compact", "home is compact")
 	check(reg.get_module(&"comms").size_class == &"normal", "comms is normal")

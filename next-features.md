@@ -4,7 +4,7 @@ Cross-document review of `feature-ideas-a.md`, `feature-ideas-b.md`, `feature-id
 
 ## Verdict
 
-Two themes appear in all four documents: **make Heat an active threat** and **add the missing Prepare step** to the contract loop. Everything else is contested or scoped differently. The recommended next batch is depth-first, built entirely on existing fields, signals, and phases — no new subsystems.
+The four proposals converge on active Heat and the missing Prepare step. Deadline enforcement, optional preparation, and active Heat are now implemented; favor/aftermath remains the next depth-first work. Broader systems remain deferred.
 
 ## What each document proposes
 
@@ -34,19 +34,19 @@ Two themes appear in all four documents: **make Heat an active threat** and **ad
 Grounding, checked against code (`autoload/game_state.gd`, `data/contracts/contract_catalog.gd`, `scenes/modules/contracts/contract_detail.gd`):
 
 - **Deadlines are enforced, not display-only.** The approved [publication-relative deadline design](docs/superpowers/specs/2026-09-05-contract-deadlines-design.md) uses authored `deadline_window_minutes` to assign each published contract a persistent `deadline_at_minute`; the catalog no longer uses fixed `deadline_day` / `deadline_minute` fields. Unaccepted offers expire and active jobs fail at `now >= deadline`, including during same-day or long clock advances. Acceptance and reload do not renew the saved window.
-- **Heat gates only choice visibility.** `_available_choices()` filters on `max_heat` / `min_heat` / `requires_mara_favor` and nothing else. Heat mutates only via `choice.heat_delta` at resolution. One high-heat-only "desperate" choice already exists (`routed_vendor_id`, `min_heat: 4`), so the ladder has a seed.
-- **`alerts` is dead weight.** Persisted, signaled, shown in the HUD and home panel, read nowhere else. It is also an unlocked rail module with no scene (a dead button).
+- **Heat has authored consequences.** Upward crossings of 3 / 6 / 9 publish one highlighted ticker and one SYSTEM message per band. Go to Ground advances 24 hours, settles rent and deadlines, then reduces Heat by 1; ordinary Rest and calendar advancement do not reduce Heat. Silent Partner's custodian route is available through Heat 5, with a lower-payout intermediary route at Heat 6+.
+- **Alerts has been removed.** New profiles omit the legacy field; old v4 profiles still load, and a saved `active_module: alerts` normalizes to Home.
 - **Favor system is one boolean.** `mara_favor_owed: bool` with `requires_mara_favor` / `sets_mara_favor_owed` / `clears_mara_favor` choice flags. Working, but single-contact and one-directional.
-- **The rail already reserves the breadth systems.** `resources/module_registry.tres` contains locked modules `crew`, `market`, `map`, `alerts`. The UI anticipates them; that does not make them the right next step.
-- **Prior design docs deferred all of this deliberately.** `2026-08-26-first-contract-vertical-slice-design.md` and `2026-08-28-early-contract-portfolio-design.md` explicitly exclude deadline-expiry, favor/contact/reputation systems, inventory, crew, factions, economy, and maps *from those slices*. These four idea documents are the proposals to lift those deferrals — this is the intended next slice, not a contradiction of the plans.
+- **The rail reserves the remaining breadth systems.** `resources/module_registry.tres` contains locked modules `crew`, `market`, and `map`. Alerts is no longer registered or rendered.
+- **Prior design docs deferred these systems deliberately.** The four idea documents proposed revisiting those deferrals. Deadlines, Contact standing, preparation, and active Heat are implemented; broad systems such as inventory, crew, factions, economy, and maps remain deferred.
 
 ## Recommendation
 
-The deadline slice and the narrow preparation slice are implemented. The next depth-first batch below continues to use existing fields, signals, and phases; none requires a new subsystem.
+Deadline enforcement, optional preparation, and active Heat are implemented. Favor/aftermath is the remaining depth-first direction; no new subsystem is required for that pass.
 
 **Implemented — contract deadlines.** The [approved design](docs/superpowers/specs/2026-09-05-contract-deadlines-design.md) uses publication windows rather than fixed calendar dates. Published offers and active jobs retain their calculated absolute cutoff across acceptance, save, and reload; offers become `expired`, active jobs become failed, and both publish abort-path successors without rewards or Heat, standing, or favor changes.
 
-**1. Heat consequence ladder + decay.** Decay in `_settle_calendar_day()` (e.g. −1/day, or only via paid cleaner/contact action per C#2). Threshold events (3 / 6 / 9) broadcast over the existing ticker and `messages` arrays. High heat already hides clean choices via `max_heat`; add the cost side so `bypass` / `force_readout` become tradeoffs. Fold in **`alerts`**: alert level follows heat and gates sweep/audit events, or delete the stat. Do not build A#3/B#3 raid event sequences yet — threshold ticker/message pressure first.
+**Implemented — active Heat.** Authored upward crossings at Heat 3 / 6 / 9 publish highlighted ticker and SYSTEM warnings. Go to Ground advances exactly 24 hours before lowering Heat by 1; rent and contract deadlines still advance during that interval. Rest does not lower Heat, and no automatic decay or raid events were added. Silent Partner's low-Heat custodian silence pays 4,700 CR; at Heat 6+, intermediary silence pays 4,300 CR without changing standing or favor. Alerts was removed while legacy v4 saves remain loadable.
 
 **Implemented — optional contract preparation.** Cold-Chain Delivery and Data Retrieval offer an optional preparation purchase on the ready screen (no `preparing` phase): a one-time upfront payment unlocks one additional `requires_prep` response without replacing basic options or advancing time, gated by Credits and surfaced through the existing `_available_choices()` filter — the same mechanism the heat/favor flags use. This is C#4 and the preparation recommendation of D, the cheap v1 of A#1/B#1. No inventory system, no asset catalog; the other five contracts have no preparation purchase. See the [approved preparation design](docs/superpowers/specs/2026-09-05-contract-preparation-design.md).
 
@@ -56,4 +56,4 @@ The deadline slice and the narrow preparation slice are implemented. The next de
 
 ## If only two
 
-**Heat ladder + preparation.** Heat consequence pressure deepens the existing risk choices; the preparation step is now implemented as an optional ready-screen purchase. Favor/aftermath remains the next depth pass.
+**Favor/aftermath remains the next depth pass.** Generalize `mara_favor_owed: bool` to a per-contact favor integer and add authored follow-up consequences that later contracts or messages can reference.

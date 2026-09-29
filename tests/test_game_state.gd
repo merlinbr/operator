@@ -146,6 +146,117 @@ func _test_silent_partner_heat_choices() -> void:
 		gs.reset_profile()
 		gs.free()
 
+func _call_go_to_ground(gs: Object) -> bool:
+	if not gs.has_method("go_to_ground"):
+		return false
+	return bool(gs.call("go_to_ground"))
+
+func _has_go_to_ground_message(messages: Array) -> bool:
+	for message: Dictionary in messages:
+		if message.sender == "SYSTEM" \
+				and message.preview == "Stayed out of sight for 24 hours. Heat reduced by 1.":
+			return true
+	return false
+
+func _test_go_to_ground() -> void:
+	var gs: Variant = GameStateScript.new()
+	gs.reset_profile()
+	gs.day = 29
+	gs.minute_of_day = 1439
+	gs.heat = 4
+	gs.contracts[0].deadline_at_minute = gs.current_minute() + 720
+	var minute_before: int = gs.current_minute()
+	var recovery_tickers: Array[String] = []
+	gs.ticker_message.connect(func(text: String, highlight: bool) -> void:
+		if highlight and text == "GO TO GROUND // HEAT -1":
+			recovery_tickers.append(text))
+	check(_call_go_to_ground(gs), "Go to Ground succeeds while idle")
+	check(gs.current_minute() == minute_before + 1440 and gs.day == 30
+		and gs.minute_of_day == 1439,
+		"Go to Ground advances exactly 24 hours")
+	check(gs.heat == 3 and gs.credits == gs.START_CREDITS - 2000
+		and gs.rent_status == &"current" and gs.next_rent_due_day == 60,
+		"Go to Ground lowers Heat after ordinary rent settlement")
+	check(gs.get_contract(&"cold_chain_delivery").status == &"expired",
+		"published C-1042 offer expires during Go to Ground")
+	check(recovery_tickers == ["GO TO GROUND // HEAT -1"]
+		and _has_go_to_ground_message(gs.messages),
+		"Go to Ground publishes highlighted ticker and SYSTEM message")
+	var restored: Variant = GameStateScript.new()
+	check(restored.load_profile() and restored.heat == 3
+		and restored.current_minute() == minute_before + 1440
+		and _has_go_to_ground_message(restored.messages),
+		"Go to Ground saves Heat, clock, and recovery message")
+	restored.reset_profile()
+	restored.free()
+	gs.free()
+
+	for rent_status: StringName in [&"due", &"overdue"]:
+		var renter: Variant = GameStateScript.new()
+		renter.reset_profile()
+		renter.day = 29
+		renter.minute_of_day = 1439
+		renter.heat = 2
+		renter.credits = 1000
+		renter.rent_status = rent_status
+		renter.rent_due_amount = 2000
+		renter.next_rent_due_day = 30
+		var renter_minute: int = renter.current_minute()
+		check(_call_go_to_ground(renter), "Go to Ground works with %s rent" % rent_status)
+		check(renter.current_minute() == renter_minute + 1440 and renter.heat == 1
+			and renter.credits == 1000 and renter.rent_status == rent_status
+			and renter.rent_due_amount == 2000,
+			"unaffordable %s rent does not block or charge Go to Ground" % rent_status)
+		renter.reset_profile()
+		renter.free()
+
+	var denied: Variant = GameStateScript.new()
+	denied.reset_profile()
+	denied.day = 29
+	denied.minute_of_day = 1439
+	denied.heat = 4
+	denied.active_contract_id = &"cold_chain_delivery"
+	var denied_minute: int = denied.current_minute()
+	var denied_credits: int = denied.credits
+	var denied_messages: Array[Dictionary] = denied.messages.duplicate(true)
+	var denied_contracts: Array[Dictionary] = denied.contracts.duplicate(true)
+	check(not _call_go_to_ground(denied), "active contract blocks Go to Ground")
+	check(denied.current_minute() == denied_minute and denied.heat == 4
+		and denied.credits == denied_credits and denied.messages == denied_messages
+		and denied.contracts == denied_contracts,
+		"active-contract rejection leaves state unchanged")
+	denied.active_contract_id = &""
+	denied.heat = 0
+	check(not _call_go_to_ground(denied), "zero Heat blocks Go to Ground")
+	check(denied.current_minute() == denied_minute and denied.heat == 0
+		and denied.credits == denied_credits and denied.messages == denied_messages
+		and denied.contracts == denied_contracts,
+		"zero-Heat rejection leaves state unchanged")
+	denied.reset_profile()
+	denied.free()
+
+func _test_heat_recross_after_recovery() -> void:
+	var gs: Variant = _at_customs()
+	var heat_warnings: Array[String] = []
+	gs.ticker_message.connect(func(text: String, _highlight: bool) -> void:
+		if text.begins_with("HEAT // "):
+			heat_warnings.append(text))
+	check(gs.resolve_contract(&"cold_chain_delivery", &"bypass"),
+		"first authored risk crosses ELEVATED")
+	gs.contracts[1].deadline_at_minute = gs.current_minute() + 100000
+	check(_call_go_to_ground(gs) and gs.heat == 3
+		and _call_go_to_ground(gs) and gs.heat == 2,
+		"two deliberate recovery actions lower Heat below ELEVATED")
+	check(gs.accept_contract(&"data_retrieval") and gs.proceed_contract(&"data_retrieval"),
+		"recovery scenario reaches D-207")
+	check(gs.resolve_contract(&"data_retrieval", &"force_readout"),
+		"second authored risk crosses ELEVATED again")
+	check(heat_warnings == ["HEAT // ELEVATED", "HEAT // ELEVATED"],
+		"re-crossing after recovery emits the threshold warning again")
+	gs.reset_profile()
+	gs.free()
+
+
 
 func _run() -> void:
 	var gs := GameStateScript.new()
@@ -389,6 +500,7 @@ func _run() -> void:
 		"hidden favor settlement is rejected")
 	no_favor_gs.free()
 	var housing_gs := GameStateScript.new()
+	housing_gs.heat = 4
 	housing_gs.day = 29
 	housing_gs.minute_of_day = 23 * 60 + 30
 	housing_gs.active_contract_id = &"cold_chain_delivery"
@@ -397,7 +509,8 @@ func _run() -> void:
 	check(housing_gs.rest_until_next_day(), "REST advances without active contract")
 	check(housing_gs.day == 30 and housing_gs.minute_of_day == 0, "REST reaches next midnight")
 	check(housing_gs.credits == 10480 and housing_gs.rent_status == &"current"
-		and housing_gs.next_rent_due_day == 60, "REST auto-pays the 2,000 CR Studio rent")
+		and housing_gs.next_rent_due_day == 60 and housing_gs.heat == 4,
+		"REST settles rent without reducing Heat")
 	housing_gs.day = 59
 	housing_gs.minute_of_day = 1439
 	housing_gs.credits = 1000
@@ -456,5 +569,8 @@ func _run() -> void:
 
 	_test_heat_thresholds()
 	_test_silent_partner_heat_choices()
+
+	_test_go_to_ground()
+	_test_heat_recross_after_recovery()
 
 	gs.free()

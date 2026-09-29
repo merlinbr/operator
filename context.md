@@ -238,6 +238,7 @@ The game should prove that **choosing and executing contracts is fun** before ex
 - **Deadline:** a persistent absolute game-time cutoff assigned when a contract is first published. Acceptance and reload do not renew it.
 - **Deadline miss:** an unaccepted published offer becomes `expired`; an active job becomes `failed`. Both use the `deadline_missed` runtime outcome.
 - **Preparation:** an optional contract purchase shown on the ready screen of Cold-Chain Delivery and Data Retrieval. A one-time upfront payment unlocks an additional response without replacing basic options or advancing time; preparation can trade Credits for a quiet, trust-earning route without creating a new favor debt. Spending is saved, is not refunded on abort or deadline failure, and is included in the contract's net result. Other contracts have no preparation purchase; faction reputation remains deferred.
+- **Heat:** an integer changed only by authored contract choices or the explicit Go to Ground action. Upward crossings at 3, 6, and 9 publish warnings; Go to Ground advances 24 hours before removing 1 Heat. Ordinary Rest does not reduce Heat.
 
 ## Open design questions
 
@@ -268,6 +269,7 @@ The implemented prototype contains:
 - seven deterministic authored contracts across Mara and the Vesper Clinic Coordinator, gated by Contact-local standing and resolved through interactive event sequences;
 - publication-relative contract deadlines: unaccepted offers expire and active jobs fail at their persistent cutoff; deadline outcomes publish the same successors as an abort without rewards or changes to Heat, standing, or favors;
 - optional contract preparation on Cold-Chain Delivery and Data Retrieval: a one-time upfront payment unlocks an additional response without replacing basic options or advancing time; preparation can trade Credits for a quiet, trust-earning route without creating a new favor debt; spending is saved, is not refunded on abort or deadline failure, and is included in the contract's net result; other contracts have no preparation purchase and faction reputation remains deferred;
+- authored Heat consequences: threshold warnings at 3 / 6 / 9, an explicit 24-hour Go to Ground recovery action, and Heat-gated Silent Partner outcomes; ordinary Rest and calendar advancement do not decay Heat;
 - a small housing loop: rest, rent, moving to the Loft, and Studio buyout.
 
 It intentionally does not contain combat, crew, inventory, market, map/travel, procedural contracts, a faction matrix, save slots, or simulation systems. New work should extend one proven player-facing loop rather than introduce a broad subsystem.

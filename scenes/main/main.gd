@@ -113,6 +113,7 @@ func _build_shell() -> void:
 				and _selected_contract_id != &"" and context_host.get_child_count() > 0:
 			context_host.get_child(0).setup(gs, gs.get_contract(_selected_contract_id)))
 	gs.contacts_changed.connect(_on_contacts_changed)
+	gs.messages_changed.connect(_on_contacts_changed)
 	gs.contract_accepted.connect(_on_contract_accepted)
 	gs.contract_proceeded.connect(_on_contract_proceeded)
 	gs.contract_resolved.connect(_on_contract_resolved)
@@ -175,7 +176,7 @@ func _build_ticker() -> void:
 
 func select_module(id: StringName) -> void:
 	if not MODULE_SCENES.has(id):
-		return # scene-less module (e.g. alerts): no-op
+		return # scene-less module: no-op
 	var was_collapsed: bool = gs.workspace_collapsed
 	if was_collapsed:
 		gs.set_workspace_collapsed(false)
@@ -199,6 +200,7 @@ func _build_primary_module(id: StringName) -> void:
 		panel.setup(gs, gs.contracts)
 	elif id == &"home":
 		panel.rest_requested.connect(_on_home_rest_requested)
+		panel.go_to_ground_requested.connect(_on_home_go_to_ground_requested)
 		panel.rent_payment_requested.connect(_on_home_rent_payment_requested)
 		panel.move_requested.connect(_on_home_move_requested)
 		panel.buyout_requested.connect(_on_home_buyout_requested)
@@ -267,6 +269,10 @@ func _refresh_home() -> void:
 
 func _on_home_rest_requested() -> void:
 	if gs.rest_until_next_day():
+		_refresh_home()
+
+func _on_home_go_to_ground_requested() -> void:
+	if gs.go_to_ground():
 		_refresh_home()
 
 func _on_home_layout_changed() -> void:

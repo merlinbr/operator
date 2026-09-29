@@ -33,6 +33,7 @@ func _run() -> void:
 	check(home_text.contains("OPERATIONS TERMINAL v0.1"), "home title")
 	check(home_text.contains("12,480 CR"), "home shows credits")
 	check(home_text.contains("LOWER VESPER"), "home shows district")
+	check(home_text.contains("HEAT       2 // LOW"), "Home shows Heat as a number and exposure band")
 	var master := home.find_child("MasterSlider", true, false) as HSlider
 	var ambience := home.find_child("AmbienceSlider", true, false) as HSlider
 	var sfx := home.find_child("SfxSlider", true, false) as HSlider
@@ -49,6 +50,24 @@ func _run() -> void:
 		and residence_text.contains("LEASED") and residence_text.contains("2,000 CR")
 		and residence_text.contains("NEXT DUE") and residence_text.contains("DAY 30"),
 		"Home shows the current leased residence and rent schedule")
+	for heat_case: Dictionary in [
+		{"heat": 5, "band": "ELEVATED"},
+		{"heat": 6, "band": "WATCHED"},
+		{"heat": 9, "band": "CRITICAL"},
+	]:
+		gs.heat = heat_case.heat
+		var heat_line := ""
+		for label: Label in home.find_children("*", "Label", true, false):
+			for line: String in label.text.split("\n", false):
+				if line.begins_with("HEAT "):
+					heat_line = line
+		check(heat_line == "HEAT       %d // %s" % [heat_case.heat, heat_case.band],
+			"Home derives the %s exposure band — got %s" % [heat_case.band, heat_line])
+	gs.heat = 2
+	var go_to_ground := home.find_child("GoToGroundButton", true, false) as Button
+	var requested_ground := [false]
+	if home.has_signal(&"go_to_ground_requested"):
+		home.connect(&"go_to_ground_requested", func() -> void: requested_ground[0] = true)
 	var rest := home.find_child("RestButton", true, false) as Button
 	var pay_rent := home.find_child("PayRentButton", true, false) as Button
 	var move := home.find_child("MoveButton", true, false) as Button
@@ -63,12 +82,29 @@ func _run() -> void:
 	home.move_requested.connect(func(id: StringName) -> void: requested_move[0] = id)
 	home.rest_requested.connect(func() -> void: requested_rest[0] = true)
 	home.buyout_requested.connect(func() -> void: requested_buyout[0] = true)
+	var minute_before_ground: int = gs.current_minute()
+	var heat_before_ground: int = gs.heat
+	check(go_to_ground != null
+		and go_to_ground.text == "GO TO GROUND // 24 HOURS // HEAT -1"
+		and not go_to_ground.disabled,
+		"Go to Ground is available at positive Heat")
+	if go_to_ground != null:
+		go_to_ground.pressed.emit()
+	check(requested_ground[0] and gs.current_minute() == minute_before_ground
+		and gs.heat == heat_before_ground,
+		"Home emits Go to Ground intent without mutating GameState")
+	gs.heat = 0
+	check(go_to_ground != null and go_to_ground.disabled,
+		"Go to Ground is disabled at zero Heat")
+	gs.heat = 2
 	check(rest != null and rest.text == "REST // ADVANCE TO DAY 15" and not rest.disabled,
 		"REST advances to the next day while idle")
 	check(pay_rent != null and not pay_rent.visible, "PAY RENT is hidden while rent is current")
 	var credits_before_move := gs.credits
 	var residence_before_move := gs.current_residence_id
 	move.pressed.emit()
+	if go_to_ground != null:
+		check(not go_to_ground.visible, "Go to Ground hides during residence confirmation")
 	check(confirmation.visible and confirmation.text.contains("CREDITS       12,480 CR")
 		and confirmation.text.contains("EXACT COST    8,000 CR")
 		and confirmation.text.contains("CURRENT RENT  2,000 CR / 30 DAYS")
@@ -83,6 +119,8 @@ func _run() -> void:
 	gs.active_contract_id = &"cold_chain_delivery"
 	gs.contracts_changed.emit()
 	check(rest.disabled, "REST is disabled during active work")
+	check(go_to_ground != null and go_to_ground.disabled,
+		"Go to Ground is disabled during active work")
 	gs.active_contract_id = &""
 	gs.rent_status = &"due"
 	gs.rent_due_amount = 2000
@@ -113,6 +151,9 @@ func _run() -> void:
 		"Stale buyout confirmation emits no intent and remains open")
 	cancel.pressed.emit()
 	check(not confirmation_box.visible, "Residence confirmation can be cancelled")
+	if go_to_ground != null:
+		check(go_to_ground.visible and not go_to_ground.disabled,
+			"Go to Ground returns after residence confirmation")
 	gs.credits = 150000
 	gs.credits_changed.emit(gs.credits)
 	buyout.pressed.emit()

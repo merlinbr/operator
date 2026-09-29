@@ -63,6 +63,7 @@ func _run() -> void:
 	var context: Control = workspace.get_node("ContextHost")
 	var rail: Control = workspace.get_node("IconRail")
 	var chip: Control = workspace.get_node("StatusChip")
+	check(rail.call("get_button", &"alerts") == null, "Alerts button is absent from the rail")
 
 	check(main.theme != null, "theme applied at Main root")
 	check(primary.get_child_count() == 1, "home panel active on start")
@@ -301,6 +302,9 @@ func _run() -> void:
 	main.select_module(&"comms")
 	check(not gs.workspace_collapsed, "selecting a module un-collapses")
 	check(primary.visible and primary.get_child(0).name == "CommsPanel", "comms open after un-collapse")
+	gs.add_message("SYSTEM", "Surveillance pressure is elevated.")
+	check(gs.active_module == &"comms" and _text(primary).contains("Surveillance pressure is elevated."),
+		"open Comms refreshes when a new message arrives")
 	check(gs.module_open, "module open after un-collapse")
 
 	var status_chip: Control = workspace.get_node("StatusChip")
@@ -317,6 +321,27 @@ func _run() -> void:
 	check(status_chip.size.x > status_chip.size.y, "status HUD is wider than tall")
 	check(absf(status_chip.position.x - (ws.x - status_chip.size.x) * 0.5) <= 1.0,
 		"status HUD is horizontally centered")
+	gs.reset_profile()
+	main.select_module(&"home")
+	gs.day = 29
+	gs.minute_of_day = 1439
+	gs.heat = 4
+	gs.contracts[0].deadline_at_minute = gs.current_minute() + 720
+	var recovery_minute: int = gs.current_minute()
+	gs.clock_changed.emit(gs.day, gs.minute_of_day)
+	var recovery_home: Control = primary.get_child(0)
+	var ground_button := _button(recovery_home, "GO TO GROUND // 24 HOURS // HEAT -1")
+	check(ground_button != null, "Main Home wires the Go to Ground action")
+	if ground_button != null:
+		ground_button.pressed.emit()
+	check(gs.current_minute() == recovery_minute + 1440 and gs.heat == 3
+		and gs.credits == gs.START_CREDITS - 2000
+		and gs.rent_status == &"current"
+		and gs.get_contract(&"cold_chain_delivery").status == &"expired",
+		"Home action advances time, settles rent and deadline, then lowers Heat")
+	check(_text(recovery_home).contains("HEAT       3 // ELEVATED"),
+		"Main refreshes Home after Go to Ground")
+	gs.reset_profile()
 
 
 func _button(control: Control, text: String) -> Button:

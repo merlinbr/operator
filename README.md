@@ -2,7 +2,7 @@
 
 A cyberpunk operations RPG — build a life and an organization as an independent operator in a dystopian corporate society.
 
-> **Status:** early playable prototype. The current build contains the navigable operations-terminal shell, boot sequence, time-reactive Studio and Loft environments, a deterministic seven-contract early-game portfolio, publication-relative enforced deadlines with hard expiry/failure, contact standing, housing/rent progression, and a persistent single-profile save. It has no combat or procedural content systems.
+> **Status:** early playable prototype. The current build contains the navigable operations-terminal shell, boot sequence, time-reactive Studio and Loft environments, a deterministic seven-contract early-game portfolio, publication-relative enforced deadlines, contact standing, authored Heat pressure with threshold warnings and explicit 24-hour recovery, housing/rent progression, and a persistent single-profile save. It has no combat or procedural content systems.
 
 Published contracts have persistent game-time deadlines. Unaccepted offers expire; active jobs fail at the cutoff. Deadline outcomes publish the same successors as an abort without paying rewards or changing Heat, standing, or favors. The remaining window is saved; acceptance and reload do not renew it.
 

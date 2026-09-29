@@ -7,7 +7,6 @@ signal credits_changed(new_credits: int)
 signal clock_changed(day: int, minute_of_day: int)
 signal district_changed(new_district: String)
 signal heat_changed(new_heat: int)
-signal alerts_changed(new_alerts: int)
 signal workspace_collapsed_changed(collapsed: bool)
 signal active_module_changed(id: StringName)
 signal module_open_changed(open: bool)
@@ -69,10 +68,6 @@ var heat: int = 2:
 	set(value):
 		heat = value
 		heat_changed.emit(heat)
-var alerts: int = 2:
-	set(value):
-		alerts = value
-		alerts_changed.emit(alerts)
 var workspace_collapsed := false
 var active_module: StringName = &""
 var module_open := false
@@ -103,7 +98,6 @@ func reset_profile() -> void:
 	day = START_DAY
 	minute_of_day = START_MINUTE
 	heat = 2
-	alerts = 2
 	workspace_collapsed = false
 	active_module = &""
 	module_open = false
@@ -212,7 +206,6 @@ func _profile_payload() -> Dictionary:
 		"day": day,
 		"minute_of_day": minute_of_day,
 		"heat": heat,
-		"alerts": alerts,
 		"workspace_collapsed": workspace_collapsed,
 		"active_module": active_module,
 		"module_open": module_open,
@@ -328,8 +321,6 @@ func _validate_profile(data: Dictionary) -> String:
 		return "profile clock is invalid"
 	if not _is_int_value(data.heat) or data.heat < 0:
 		return "profile Heat is invalid"
-	if not _is_int_value(data.alerts) or data.alerts < 0:
-		return "profile alerts are invalid"
 	if typeof(data.workspace_collapsed) != TYPE_BOOL or typeof(data.module_open) != TYPE_BOOL:
 		return "profile workspace state is invalid"
 	if not _is_string_value(data.active_module) or not _is_string_value(data.active_contract_id):
@@ -500,9 +491,10 @@ func _apply_profile(data: Dictionary) -> void:
 	day = int(data.day)
 	minute_of_day = int(data.minute_of_day)
 	heat = int(data.heat)
-	alerts = int(data.alerts)
 	workspace_collapsed = data.workspace_collapsed
 	active_module = StringName(str(data.active_module))
+	if active_module == &"alerts":
+		active_module = &"home"
 	module_open = data.module_open
 	active_contract_id = StringName(str(data.active_contract_id))
 	mara_favor_owed = data.mara_favor_owed
@@ -623,6 +615,16 @@ func _set_rent_state(status: StringName, amount: int, due_day: int) -> void:
 func _housing_feedback(ticker: String, preview: String) -> void:
 	push_ticker(ticker, true)
 	_add_message("SYSTEM", preview)
+
+func go_to_ground() -> bool:
+	if active_contract_id != &"" or heat <= 0:
+		return false
+	_advance_minutes(1440)
+	heat -= 1
+	push_ticker("GO TO GROUND // HEAT -1", true)
+	_add_message("SYSTEM", "Stayed out of sight for 24 hours. Heat reduced by 1.")
+	save_profile()
+	return true
 
 func rest_until_next_day() -> bool:
 	if active_contract_id != &"":

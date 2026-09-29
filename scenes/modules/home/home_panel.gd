@@ -11,6 +11,7 @@ const CONFIRMATION_MIN_HEIGHT := 520.0
 
 signal residence_layout_changed
 signal rest_requested
+signal go_to_ground_requested
 signal rent_payment_requested
 signal move_requested(id: StringName)
 signal buyout_requested
@@ -22,6 +23,7 @@ var _residence_status: Label
 var _residence_rent: Label
 var _residence_due: Label
 var _rest_button: Button
+var _go_to_ground_button: Button
 var _pay_rent_button: Button
 var _move_button: Button
 var _buyout_button: Button
@@ -110,6 +112,10 @@ func _build_residence(parent: VBoxContainer) -> void:
 	_rest_button.name = "RestButton"
 	_rest_button.pressed.connect(_on_rest_pressed)
 	actions.add_child(_rest_button)
+	_go_to_ground_button = Button.new()
+	_go_to_ground_button.name = "GoToGroundButton"
+	_go_to_ground_button.pressed.connect(_on_go_to_ground_pressed)
+	actions.add_child(_go_to_ground_button)
 	_pay_rent_button = Button.new()
 	_pay_rent_button.name = "PayRentButton"
 	_pay_rent_button.text = "PAY RENT"
@@ -153,7 +159,6 @@ func setup(gs: Node, data: Variant = null) -> void:
 		_gs.clock_changed.connect(_refresh)
 		_gs.district_changed.connect(_refresh)
 		_gs.heat_changed.connect(_refresh)
-		_gs.alerts_changed.connect(_refresh)
 		_gs.residence_changed.connect(_refresh)
 		_gs.rent_changed.connect(_refresh)
 		_gs.contracts_changed.connect(_refresh)
@@ -255,6 +260,11 @@ func _on_rest_pressed() -> void:
 	if _rest_button.disabled:
 		return
 	rest_requested.emit()
+
+func _on_go_to_ground_pressed() -> void:
+	if _go_to_ground_button.disabled or not _go_to_ground_button.visible:
+		return
+	go_to_ground_requested.emit()
 
 func _on_pay_rent_pressed() -> void:
 	if not _pay_rent_button.visible:
@@ -362,6 +372,8 @@ func _update_residence_actions() -> void:
 	var target := _residence(target_id)
 	var can_manage: bool = not active_work and _gs.rent_status == &"current"
 	_rest_button.disabled = active_work
+	_go_to_ground_button.disabled = active_work or _gs.heat <= 0
+	_go_to_ground_button.visible = not _confirm_box.visible
 	_rest_button.visible = not _confirm_box.visible
 	_pay_rent_button.visible = not _confirm_box.visible and has_due and _gs.credits >= _gs.rent_due_amount
 	_move_button.visible = not _confirm_box.visible and can_manage and not target.is_empty() \
@@ -378,12 +390,18 @@ func _refresh(_signal_value: Variant = null, _signal_value2: Variant = null,
 	if residence.is_empty():
 		return
 	_summary.add_theme_color_override("font_color", COLOR_DIM)
+	var heat_band := "LOW"
+	if _gs.heat >= 9:
+		heat_band = "CRITICAL"
+	elif _gs.heat >= 6:
+		heat_band = "WATCHED"
+	elif _gs.heat >= 3:
+		heat_band = "ELEVATED"
 	_summary.text = "\n".join([
 		"CREDITS    " + GameStateScript.format_credits(_gs.credits) + " CR",
 		"DISTRICT   " + _gs.district,
 		"TIME       DAY %d  %s" % [_gs.day, _gs.clock_text()],
-		"HEAT       " + "▲".repeat(int(_gs.heat)),
-		"ALERTS     %d" % _gs.alerts,
+		"HEAT       %d // %s" % [_gs.heat, heat_band],
 		"",
 		"> select CONTRACTS on the rail to view work",
 	])
@@ -399,6 +417,7 @@ func _refresh(_signal_value: Variant = null, _signal_value2: Variant = null,
 			_residence_due.text = "NEXT DUE   // DAY %d" % _gs.next_rent_due_day \
 					if not _gs.owned_residence_ids.has(residence.id) else "NO RENT DUE"
 	_rest_button.text = "REST // ADVANCE TO DAY %d" % (_gs.day + 1)
+	_go_to_ground_button.text = "GO TO GROUND // 24 HOURS // HEAT -1"
 	_move_button.text = "MOVE TO " + ("SECTOR 9 LOFT" if residence.id == &"lower_vesper_studio" else "LOWER VESPER STUDIO")
 	_update_residence_actions()
 
