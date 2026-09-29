@@ -180,7 +180,8 @@ func select_module(id: StringName) -> void:
 	var was_collapsed: bool = gs.workspace_collapsed
 	if was_collapsed:
 		gs.set_workspace_collapsed(false)
-	if not was_collapsed and gs.active_module == id and gs.module_open:
+	if not was_collapsed and gs.active_module == id and gs.module_open \
+			and primary_host.get_child_count() > 0:
 		gs.set_module_open(false) # toggle closed - active_module stays set
 		close_context()
 		return

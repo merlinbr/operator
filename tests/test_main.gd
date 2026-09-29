@@ -341,6 +341,26 @@ func _run() -> void:
 		"Home action advances time, settles rent and deadline, then lowers Heat")
 	check(_text(recovery_home).contains("HEAT       3 // ELEVATED"),
 		"Main refreshes Home after Go to Ground")
+	var legacy_root := Node.new()
+	root.add_child(legacy_root)
+	var legacy_gs := GameStateScript.new()
+	legacy_gs.name = "GameState"
+	legacy_root.add_child(legacy_gs)
+	var legacy_payload: Dictionary = legacy_gs._profile_payload()
+	legacy_payload.active_module = &"alerts"
+	legacy_payload.module_open = true
+	legacy_gs._apply_profile(legacy_payload)
+	var legacy_main := MainScene.instantiate()
+	legacy_root.add_child(legacy_main)
+	var legacy_primary: Control = legacy_main.get_node("Workspace/PrimaryHost")
+	check(legacy_gs.active_module == &"home" and legacy_gs.module_open
+		and legacy_primary.visible and legacy_primary.get_child_count() == 1
+		and legacy_primary.get_child(0).name == "HomePanel",
+		"legacy open Alerts profile starts with a visible Home panel")
+	legacy_main.select_module(&"home")
+	check(not legacy_gs.module_open and not legacy_primary.visible,
+		"clicking the loaded Home icon still toggles its panel closed")
+	legacy_root.queue_free()
 	gs.reset_profile()
 
 
