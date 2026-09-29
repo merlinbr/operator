@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Active Heat — design review</title>
+  <style>
+    :root { color-scheme: dark; --bg:#101820; --surface:#1b2934; --text:#e7edf0; --muted:#abbec7; --line:#41545e; --accent:#80d6e7; --warm:#ffd185; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.65 system-ui, sans-serif; }
+    a { color: var(--accent); }
+    a:focus-visible { outline: 3px solid var(--warm); outline-offset: 3px; }
+    .wrap { max-width: 900px; margin: auto; padding: 36px 24px 88px; }
+    header { border-bottom: 1px solid var(--line); padding-bottom: 28px; }
+    .eyebrow { color: var(--accent); font: 700 13px/1.4 ui-monospace, monospace; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { font-size: clamp(2.4rem, 6vw, 4rem); line-height: 1.1; margin: 12px 0; }
+    h2 { font-size: 1.75rem; margin: 0 0 20px; line-height: 1.25; }
+    h3 { font-size: 1.12rem; margin: 0 0 6px; }
+    p { margin: 8px 0 16px; }
+    .lead { font-size: 1.14rem; max-width: 72ch; }
+    .notice { background: var(--surface); border-left: 4px solid var(--warm); padding: 14px 18px; margin: 24px 0; }
+    nav { display: flex; flex-wrap: wrap; gap: 10px 22px; padding-top: 18px; }
+    section { padding: 36px 0 8px; border-bottom: 1px solid var(--line); scroll-margin-top: 24px; }
+    .card { padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; margin: 14px 0; }
+    .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+    ul { padding-left: 1.35em; }
+    li { margin: 8px 0; }
+    code { font: .91em ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--accent); overflow-wrap: anywhere; }
+    .table-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; min-width: 520px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--line); }
+    th { color: var(--accent); }
+    .small { color: var(--muted); font-size: .9rem; }
+    @media print { :root { color-scheme: light; --bg:#fff; --surface:#f2f6f8; --text:#17232a; --muted:#43545d; --line:#9baeb6; --accent:#075b70; --warm:#7b4700; } body { font-size: 11pt; } .wrap { padding: 0; } nav { display: none; } .card { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="eyebrow">Operator / design review / 29 September 2026</div>
+      <h1>Active Heat</h1>
+      <p class="lead">Make risky contract resolutions carry a legible, recoverable cost in the existing seven-contract, game-time-driven prototype.</p>
+      <p class="notice"><strong>Design only.</strong> Authored contract pressure, a 24-hour Go to Ground action removing one Heat, and removal of the unused Alerts field/button are approved directions—not implemented features. Review this design before the implementation plan.</p>
+      <nav aria-label="Sections"><a href="#rules">Player rules</a><a href="#flow">State &amp; data flow</a><a href="#checks">Checks</a><a href="#boundaries">Boundaries</a></nav>
+    </header>
+
+    <section id="rules" aria-labelledby="rules-title">
+      <h2 id="rules-title">Player rules</h2>
+      <div class="card"><h3>Heat and exposure</h3><p>Heat starts at 2, stays nonnegative, and increases only through authored contract responses. There is no automatic decay; ordinary Rest does not reduce Heat. Exposure labels are derived from Heat, not saved as a second meter.</p>
+        <div class="table-scroll"><table><thead><tr><th scope="col">Heat</th><th scope="col">Exposure</th><th scope="col">On upward crossing</th></tr></thead><tbody><tr><td>0–2</td><td>LOW</td><td>No warning</td></tr><tr><td>3–5</td><td>ELEVATED</td><td>At 3</td></tr><tr><td>6–8</td><td>WATCHED</td><td>At 6</td></tr><tr><td>9+</td><td>CRITICAL</td><td>At 9</td></tr></tbody></table></div>
+        <p>Each newly crossed threshold sends one distinct SYSTEM message and highlighted ticker warning, in ascending order. A jump across two sends both. Falling Heat and reloading send none; crossing again after recovery can warn again. Contract-resolution feedback stays. Heat is uncapped, and CRITICAL remains the label above 9. Warnings describe surveillance pressure, not a raid, sweep, credit penalty, or forced move.</p></div>
+      <div class="card"><h3>Contract choices</h3><p>Data Retrieval keeps its existing swap: <code>spoof_credentials</code> at Heat ≤3 and <code>routed_vendor_id</code> at Heat ≥4. The prepared work order and always-available responses keep their rules. Visible choices and direct resolution requests must agree.</p>
+        <p>Silent Partner (M-613): at Heat ≤5, <code>buy_silence</code> pays 900 CR out of the 5,600-CR reward, yielding <strong>4,700 CR</strong> and Heat +0. At Heat ≥6, replace it with authored <code>buy_intermediary_silence</code>: pay 1,300 CR out of the reward, yielding <strong>4,300 CR</strong> and Heat +0. It completes the contract with no standing/favor changes or successor unlocks; its preview, result, and message explain the intermediary needed under scrutiny. <code>mirror_archive</code> (+5,600 CR, Heat +2) and <code>abort</code> remain available at every Heat. No global price multiplier or other changed contract outcomes.</p></div>
+      <div class="card"><h3>Go to Ground</h3><p>Home offers <strong>GO TO GROUND // 24 HOURS // HEAT -1</strong> when Heat &gt;0 and no contract is active. One use advances exactly 1,440 game minutes through normal clock, deadline, and rent settlement; then it removes one Heat and saves. It directly costs no Credits, grants no standing/favor, moves no residence, and refunds no expired opportunity. Due or overdue rent does not prevent it. With Heat 0 or an active contract, reject with no mutation. Existing Rest keeps its midnight timing and active-contract restriction.</p><p>Home shows the exact Heat number and exposure label alongside this action and its time cost. Disable the button when unusable; hide it during residence confirmation. No new panel, modal, or status-chip redesign.</p></div>
+      <div class="card"><h3>Remove Alerts</h3><p>Remove the inert rail item and its automatic separator, Home count, GameState signal/state, and serialized field. Heat becomes the only pressure measure; do not add an Alerts scene.</p></div>
+    </section>
+
+    <section id="flow" aria-labelledby="flow-title">
+      <h2 id="flow-title">State &amp; data flow</h2>
+      <ul>
+        <li><code>GameState</code> owns mutations. Resolution applies authored Heat, then publishes warnings on upward crossings. Existing <code>heat_changed</code>, <code>messages_changed</code>, and <code>ticker_message</code> signals update Home, Comms, and ticker. Comms refreshes while open when a message arrives; no message threads or read actions.</li>
+        <li><code>get_contract()</code> returns choice snapshots filtered by <code>_available_choices()</code>; <code>resolve_contract()</code> enforces the same filter. Contract detail displays authored previews without computing prices.</li>
+        <li>Home sends a Go to Ground intent through Main to a guarded GameState action. Advance 1,440 minutes first through <code>_advance_minutes()</code>, including offer expiry and rent; then lower Heat by one, publish a recovery ticker/SYSTEM message, and save once. No active job can use the action, but published unaccepted offers can expire during it.</li>
+        <li>Previously saved version-4 profiles and supported earlier migrations still load. Ignore a legacy <code>alerts</code> key and omit it on new saves; no version bump is required because no required field is added. If an old profile selects <code>alerts</code> as its active module, select <code>home</code> on load. Preserve other module handling and persist Heat, messages, clock, contracts, and rent. Loading sends no threshold warning and removes no Heat.</li>
+      </ul>
+    </section>
+
+    <section id="checks" aria-labelledby="checks-title">
+      <h2 id="checks-title">What must be verified</h2>
+      <ul>
+        <li>2→4, 5→7, and 8→10 warn only for newly crossed bands; save/reload does not replay warnings. Falling or unchanged Heat is silent; lowering and crossing again warns again.</li>
+        <li>At Heat 5 versus 6, Silent Partner shows the correct choices and previews. Directly requesting a hidden option fails without mutation. The high-Heat response pays exactly 4,300 CR with Heat +0, unchanged standing/favor; other responses still work.</li>
+        <li>Go to Ground advances exactly 24 hours even one minute before midnight; ordinary rent and offer deadlines settle. It removes one Heat and persists. At zero Heat or with active work it changes nothing. Rest never reduces Heat.</li>
+        <li>Old profiles containing <code>alerts</code>, including one with active module <code>alerts</code>, keep gameplay data and save without the obsolete field. Rail has no dead Alerts button; Comms updates on a warning while already open.</li>
+      </ul>
+    </section>
+
+    <section id="boundaries" aria-labelledby="boundaries-title"><h2 id="boundaries-title">Explicit boundaries</h2><p>No raids, sweeps, random rolls, persistent alert level, new contract phases, generic repricing, new housing tiers, extra favors, new audio assets, or map/district simulation. Missed contract deadlines still apply no Heat penalty. Warnings change neither deadlines nor payouts.</p></section>
+    <p class="small">Readable companion to <a href="2026-09-29-active-heat-design.md">the Markdown source spec</a>. If a detail differs, the Markdown spec is authoritative.</p>
+  </main>
+</body>
+</html>
