@@ -22,6 +22,130 @@ func _choice_ids(contract: Dictionary) -> Array[StringName]:
 	for choice: Dictionary in contract.complication.choices:
 		ids.append(choice.id)
 	return ids
+func _at_silent_partner() -> Variant:
+	var gs := GameStateScript.new()
+	_resolve_c1042(gs, &"call_mara")
+	check(gs.accept_contract(&"data_retrieval"), "Silent Partner setup accepts D-207")
+	check(gs.proceed_contract(&"data_retrieval"), "Silent Partner setup proceeds D-207")
+	check(gs.resolve_contract(&"data_retrieval", &"buy_token"), "Silent Partner setup resolves D-207")
+	return gs
+
+func _test_heat_thresholds() -> void:
+	var scenarios := [
+		{"start": 2, "delta": 2, "final": 4, "bands": [&"ELEVATED"]},
+		{"start": 5, "delta": 2, "final": 7, "bands": [&"WATCHED"]},
+		{"start": 8, "delta": 2, "final": 10, "bands": [&"CRITICAL"]},
+		{"start": 2, "delta": 8, "final": 10,
+			"bands": [&"ELEVATED", &"WATCHED", &"CRITICAL"]},
+	]
+	for scenario: Dictionary in scenarios:
+		var gs: Variant = _at_customs()
+		if scenario.delta != 2:
+			for choice: Dictionary in gs.contracts[0].complication.choices:
+				if choice.id == &"bypass":
+					choice.heat_delta = scenario.delta
+		gs.heat = scenario.start
+		var expected_bands: Array[StringName] = []
+		var actual_bands: Array[StringName] = []
+		for band: StringName in scenario.bands:
+			expected_bands.append(band)
+		gs.ticker_message.connect(func(text: String, _highlight: bool) -> void:
+			if text.begins_with("HEAT // "):
+				actual_bands.append(StringName(text.substr(8))))
+		var previous_messages: int = gs.messages.size()
+		check(gs.resolve_contract(&"cold_chain_delivery", &"bypass"),
+			"authored Heat increase resolves from %d" % scenario.start)
+		check(gs.heat == scenario.final, "resolution reaches Heat %d" % scenario.final)
+		check(actual_bands == expected_bands, "threshold ticker crossings are ordered and exact")
+		var message_bands: Array[StringName] = []
+		for message: Dictionary in gs.messages.slice(previous_messages):
+			if message.sender != "SYSTEM":
+				continue
+			for band: StringName in expected_bands:
+				if String(message.preview).begins_with("HEAT // %s //" % String(band)):
+					message_bands.append(band)
+		check(message_bands == expected_bands, "each crossed threshold has a SYSTEM message")
+		var saved_warning_messages: Array[String] = []
+		for message: Dictionary in gs.messages:
+			if message.sender == "SYSTEM" and String(message.preview).begins_with("HEAT // "):
+				saved_warning_messages.append("%s: %s" % [String(message.id), String(message.preview)])
+		var restored := GameStateScript.new()
+		var replayed_warnings := [0]
+		restored.ticker_message.connect(func(text: String, _highlight: bool) -> void:
+			if text.begins_with("HEAT // "):
+				replayed_warnings[0] += 1)
+		check(restored.load_profile(), "threshold feedback profile reloads")
+		var restored_warning_messages: Array[String] = []
+		for message: Dictionary in restored.messages:
+			if message.sender == "SYSTEM" and String(message.preview).begins_with("HEAT // "):
+				restored_warning_messages.append("%s: %s" % [String(message.id), String(message.preview)])
+		check(restored.heat == scenario.final
+			and restored_warning_messages == saved_warning_messages
+			and replayed_warnings[0] == 0,
+			"reload preserves Heat and threshold messages without replaying warnings")
+		restored.reset_profile()
+		restored.free()
+		gs.free()
+
+	var quiet: Variant = _at_customs()
+	quiet.heat = 3
+	var quiet_warnings := [0]
+	quiet.ticker_message.connect(func(text: String, _highlight: bool) -> void:
+		if text.begins_with("HEAT // "):
+			quiet_warnings[0] += 1)
+	check(quiet.resolve_contract(&"cold_chain_delivery", &"pay_fee"),
+		"zero-Heat resolution remains available")
+	quiet.heat = 2
+	check(quiet_warnings[0] == 0, "unchanged and falling Heat do not emit warnings")
+	quiet.reset_profile()
+	quiet.free()
+
+func _test_silent_partner_heat_choices() -> void:
+	for heat_value: int in [5, 6]:
+		var gs: Variant = _at_silent_partner()
+		gs.heat = heat_value
+		check(gs.accept_contract(&"silent_partner"), "M-613 accepts at Heat %d" % heat_value)
+		check(gs.proceed_contract(&"silent_partner"), "M-613 proceeds at Heat %d" % heat_value)
+		var ids := _choice_ids(gs.get_contract(&"silent_partner"))
+		check(ids.has(&"mirror_archive") and ids.has(&"abort"),
+			"M-613 keeps mirror and abort at Heat %d" % heat_value)
+		check(ids.has(&"buy_silence") == (heat_value <= 5)
+			and ids.has(&"buy_intermediary_silence") == (heat_value >= 6),
+			"M-613 exposes only the authored silence route for Heat %d" % heat_value)
+		var hidden_choice: StringName = &"buy_intermediary_silence" if heat_value == 5 else &"buy_silence"
+		var credits_before: int = gs.credits
+		var phase_before: StringName = gs.get_contract(&"silent_partner").phase
+		check(not gs.resolve_contract(&"silent_partner", hidden_choice),
+			"hidden M-613 choice is rejected at Heat %d" % heat_value)
+		check(gs.credits == credits_before and gs.active_contract_id == &"silent_partner"
+			and gs.get_contract(&"silent_partner").phase == phase_before,
+			"hidden M-613 choice rejection does not mutate state")
+		if heat_value == 5:
+			check(gs.resolve_contract(&"silent_partner", &"buy_silence")
+				and gs.credits == credits_before + 4700 and gs.heat == 5,
+				"low-Heat custodian silence retains its 4,700 CR outcome")
+		else:
+			var outcome: Variant = _at_silent_partner()
+			outcome.heat = 6
+			check(outcome.accept_contract(&"silent_partner")
+				and outcome.proceed_contract(&"silent_partner"),
+				"high-Heat outcome setup reaches M-613")
+			var payout_before: int = outcome.credits
+			var standing_before: int = outcome.standing_for(&"mara")
+			var favor_before: bool = outcome.mara_favor_owed
+			check(outcome.resolve_contract(&"silent_partner", &"buy_intermediary_silence"),
+				"high-Heat intermediary silence resolves")
+			check(outcome.credits == payout_before + 4300 and outcome.heat == 6,
+				"intermediary silence pays 4,300 CR without more Heat")
+			check(outcome.standing_for(&"mara") == standing_before
+				and outcome.mara_favor_owed == favor_before
+				and outcome.get_contract(&"silent_partner").status == &"completed",
+				"intermediary silence preserves standing and favor and completes M-613")
+			outcome.reset_profile()
+			outcome.free()
+		gs.reset_profile()
+		gs.free()
+
 
 func _run() -> void:
 	var gs := GameStateScript.new()
@@ -329,5 +453,8 @@ func _run() -> void:
 		and not blocked_housing_gs.buy_out_current_residence(),
 		"due rent blocks moving and buying")
 	blocked_housing_gs.free()
+
+	_test_heat_thresholds()
+	_test_silent_partner_heat_choices()
 
 	gs.free()

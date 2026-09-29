@@ -22,6 +22,15 @@ const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
 const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
 const PROFILE_VERSION := 4
 
+const HEAT_WARNING_BANDS := [
+	{"threshold": 3, "name": "ELEVATED",
+		"message": "Surveillance pressure has entered the elevated band."},
+	{"threshold": 6, "name": "WATCHED",
+		"message": "Repeated exposure has placed the operator under closer scrutiny."},
+	{"threshold": 9, "name": "CRITICAL",
+		"message": "Surveillance pressure is critical; future exposure will be harder to hide."},
+]
+
 signal contracts_changed
 signal contacts_changed
 signal messages_changed
@@ -837,8 +846,10 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 		return false
 	if choice.credit_delta != 0:
 		_add_credits(choice.credit_delta)
+	var previous_heat := heat
 	if choice.heat_delta != 0:
 		heat += choice.heat_delta
+	_publish_heat_crossings(previous_heat, heat)
 	if choice.contact_standing_delta > 0:
 		_raise_contact_standing(contract.contact_id, int(choice.contact_standing_delta))
 	if choice.get("sets_mara_favor_owed", false):
@@ -866,6 +877,13 @@ func _unlock_contracts(ids: Array, published_at_minute: int) -> void:
 			continue
 		contract.is_playable = true
 		contract.deadline_at_minute = published_at_minute + int(contract.deadline_window_minutes)
+
+func _publish_heat_crossings(previous_heat: int, new_heat: int) -> void:
+	for band: Dictionary in HEAT_WARNING_BANDS:
+		if previous_heat < band.threshold and new_heat >= band.threshold:
+			var band_name := String(band.name)
+			push_ticker("HEAT // " + band_name, true)
+			_add_message("SYSTEM", "HEAT // %s // %s" % [band_name, band.message])
 
 func _push_resolution_feedback(choice: Dictionary) -> void:
 	push_ticker(choice.ticker, true)
