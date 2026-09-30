@@ -48,9 +48,6 @@ func _run() -> void:
 	check(recovery.code == "R-311" and recovery.contact_id == &"vesper_clinic"
 		and recovery.minimum_contact_standing == 0,
 		"R-311 introduces the Cold-tier Vesper Clinic route")
-	check(_choice(recovery, &"settle_mara_favor").requires_mara_favor
-		and _choice(recovery, &"settle_mara_favor").clears_mara_favor,
-		"R-311 preserves Mara's separate favor settlement")
 	check(_successors(recovery) == [&"dialysis_relay"],
 		"every R-311 outcome publishes the Known-tier Clinic follow-up")
 

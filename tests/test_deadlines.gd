@@ -27,7 +27,7 @@ func _test_offer_cutoff() -> void:
 		"offer expires at equality within the day")
 	check(not gs.accept_contract(DELIVERY), "expired offer cannot be accepted")
 	check(gs.credits == credits and gs.heat == heat
-		and gs.standing_for(&"mara") == standing and not gs.mara_favor_owed,
+		and gs.standing_for(&"mara") == standing and gs.mara_favor_balance == 0,
 		"expiry has no reward, Heat, standing or favor effects")
 	var data: Dictionary = gs.get_contract(&"data_retrieval")
 	check(gs.is_contract_available(data)
@@ -70,9 +70,21 @@ func _test_complication_cutoff() -> void:
 	gs.advance_minutes(due - gs.current_minute())
 	check(gs.get_contract(DELIVERY).status == &"failed"
 		and not gs.resolve_contract(DELIVERY, &"call_mara")
-		and not gs.mara_favor_owed and gs.credits == gs.START_CREDITS,
+		and gs.mara_favor_balance == 0 and gs.credits == gs.START_CREDITS,
 		"a complication cannot resolve for rewards after the cutoff")
 	gs.free()
+	var owed := GameStateScript.new()
+	check(owed.accept_contract(DELIVERY) and owed.proceed_contract(DELIVERY)
+		and owed.resolve_contract(DELIVERY, &"call_mara")
+		and owed.mara_favor_balance == -1,
+		"real favor debt fixture resolves before deadline expiry")
+	var owed_due: int = owed.get_contract(&"data_retrieval").deadline_at_minute
+	owed.advance_minutes(owed_due - owed.current_minute())
+	check(owed.mara_favor_balance == -1
+		and owed.get_contract(&"data_retrieval").status == &"expired",
+		"deadline expiry preserves existing favor debt")
+	owed.reset_profile()
+	owed.free()
 
 func _portfolio(gs: Node) -> Array:
 	var result: Array = [gs.day, gs.minute_of_day, gs.credits,

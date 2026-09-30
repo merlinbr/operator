@@ -44,7 +44,7 @@ func _run() -> void:
 	clean.next_rent_due_day = 57
 	clean.rent_due_amount = 6000
 	clean.rent_status = &"due"
-	clean.mara_favor_owed = true
+	clean.mara_favor_balance = -1
 	clean.messages.append({"id": &"msg_saved", "sender": "TEST", "preview": "saved", "unread": false})
 	clean.contracts[0].deadline_at_minute = clean.current_minute() + int(clean.contracts[0].deadline_window_minutes)
 	check(clean.accept_contract(&"cold_chain_delivery"), "contract mutation setup succeeds")
@@ -61,7 +61,7 @@ func _run() -> void:
 		and restored.heat == 6,
 		"scalar gameplay fields restore")
 	check(restored.workspace_collapsed and restored.active_module == &"contracts"
-		and restored.module_open and restored.mara_favor_owed,
+		and restored.module_open and restored.mara_favor_balance == -1,
 		"workspace, module, and favor state restore")
 	check(restored.current_residence_id == &"sector_9_loft"
 		and restored.owned_residence_ids == [&"lower_vesper_studio"]
@@ -78,6 +78,9 @@ func _run() -> void:
 		"active contract record restores")
 
 	var legacy_alerts_payload: Dictionary = clean._profile_payload()
+	legacy_alerts_payload.erase("mara_favor_balance")
+	legacy_alerts_payload["mara_favor_owed"] = true
+	legacy_alerts_payload.version = 4
 	legacy_alerts_payload["alerts"] = 4
 	legacy_alerts_payload.active_module = &"alerts"
 	var legacy_file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -87,14 +90,19 @@ func _run() -> void:
 		legacy_file.close()
 	var legacy_restored := GameStateScript.new()
 	check(legacy_restored.load_profile() and legacy_restored.heat == 6
-		and legacy_restored.active_module == &"home",
+		and legacy_restored.active_module == &"home"
+		and legacy_restored.mara_favor_balance == -1,
 		"legacy v4 Alerts field loads and normalizes the module to Home")
 	check(legacy_restored.save_profile(), "legacy Alerts profile saves in the current schema")
 	var normalized_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	var normalized_payload: Dictionary = JSON.parse_string(normalized_file.get_as_text())
 	normalized_file.close()
-	check(not normalized_payload.has("alerts") and normalized_payload.active_module == "home",
-		"normalized profile removes the legacy Alerts field")
+	check(normalized_payload.version == 5
+		and normalized_payload.mara_favor_balance == -1
+		and not normalized_payload.has("mara_favor_owed")
+		and not normalized_payload.has("alerts")
+		and normalized_payload.active_module == "home",
+		"normalized profile removes legacy fields and writes v5")
 	legacy_restored.reset_profile()
 	legacy_restored.free()
 	var stable := GameStateScript.new()
@@ -178,6 +186,10 @@ func _run() -> void:
 	_test_prepared_overdue_load()
 	_test_invalid_preparation_profiles()
 	_test_preparation_save_failure()
+	_test_favor_balance_round_trip()
+	_test_v4_favor_migration()
+	_test_invalid_favor_profiles()
+	_test_favor_route_persistence()
 
 func _write_deadline_profile(payload: Dictionary) -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -186,6 +198,127 @@ func _write_deadline_profile(payload: Dictionary) -> void:
 		return
 	file.store_string(JSON.stringify(payload))
 	file.close()
+func _at_positive_silent_partner() -> Variant:
+	var gs := GameStateScript.new()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.proceed_contract(&"cold_chain_delivery")
+		and gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"),
+		"positive favor route resolves C-1042")
+	check(gs.accept_contract(&"dead_drop_audit")
+		and gs.proceed_contract(&"dead_drop_audit")
+		and gs.resolve_contract(&"dead_drop_audit", &"trace_tag")
+		and gs.mara_favor_balance == 1,
+		"positive favor route traces M-508")
+	check(gs.accept_contract(&"data_retrieval")
+		and gs.proceed_contract(&"data_retrieval")
+		and gs.resolve_contract(&"data_retrieval", &"spoof_credentials"),
+		"positive favor route reaches Trusted standing")
+	check(gs.accept_contract(&"silent_partner")
+		and gs.proceed_contract(&"silent_partner"),
+		"positive favor route reaches M-613 complication")
+	return gs
+
+func _test_favor_balance_round_trip() -> void:
+	for balance: int in [-1, 0, 1]:
+		var gs := GameStateScript.new()
+		gs.reset_profile()
+		gs.mara_favor_balance = balance
+		check(gs.save_profile(), "signed balance %d saves" % balance)
+		var restored := GameStateScript.new()
+		check(restored.load_profile() and restored.mara_favor_balance == balance,
+			"signed balance %d round-trips" % balance)
+		var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+		var payload: Dictionary = JSON.parse_string(file.get_as_text())
+		file.close()
+		check(payload.version == 5 and payload.mara_favor_balance == balance
+			and not payload.has("mara_favor_owed"),
+			"signed balance %d uses only the v5 field" % balance)
+		restored.reset_profile()
+		gs.free()
+		restored.free()
+
+func _test_v4_favor_migration() -> void:
+	for owed: bool in [true, false]:
+		var gs := GameStateScript.new()
+		gs.reset_profile()
+		var payload: Dictionary = gs._profile_payload()
+		payload.erase("mara_favor_balance")
+		payload["mara_favor_owed"] = owed
+		payload.version = 4
+		_write_deadline_profile(payload)
+		var restored := GameStateScript.new()
+		var expected: int = -1 if owed else 0
+		check(restored.load_profile() and restored.mara_favor_balance == expected,
+			"v4 %s fixture migrates to signed balance" % str(owed))
+		var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+		var persisted: Dictionary = JSON.parse_string(file.get_as_text())
+		file.close()
+		check(persisted.version == 5 and persisted.mara_favor_balance == expected
+			and not persisted.has("mara_favor_owed"),
+			"v4 %s migration persists clean v5 data" % str(owed))
+		restored.reset_profile()
+		gs.free()
+		restored.free()
+
+func _test_invalid_favor_profiles() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var valid: Dictionary = gs._profile_payload()
+	for bad: Variant in [-2, 2, true, 0.5]:
+		gs.reset_profile()
+		var invalid: Dictionary = valid.duplicate(true)
+		invalid.mara_favor_balance = bad
+		_write_deadline_profile(invalid)
+		var restored := GameStateScript.new()
+		check(not restored.load_profile(), "invalid v5 balance %s is rejected" % str(bad))
+		restored.free()
+	gs.reset_profile()
+	var missing: Dictionary = valid.duplicate(true)
+	missing.erase("mara_favor_balance")
+	_write_deadline_profile(missing)
+	var missing_restored := GameStateScript.new()
+	check(not missing_restored.load_profile(), "missing v5 balance is rejected")
+	missing_restored.free()
+	gs.reset_profile()
+	gs.free()
+
+func _test_favor_route_persistence() -> void:
+	var gs: Variant = _at_positive_silent_partner()
+	check(gs.mara_favor_balance == 1, "positive balance exists before reload")
+	check(gs.save_profile(), "positive complication profile saves")
+	var restored := GameStateScript.new()
+	check(restored.load_profile()
+		and restored.mara_favor_balance == 1
+		and restored.get_contract(&"silent_partner").complication.choices.any(
+			func(choice: Dictionary) -> bool: return choice.id == &"call_in_mara_favor"),
+		"reload keeps M-613 favor choice available")
+	var credits_before: int = restored.credits
+	var active_before: StringName = restored.active_contract_id
+	check(not restored.resolve_contract(&"silent_partner", &"buy_intermediary_silence")
+		and restored.credits == credits_before
+		and restored.mara_favor_balance == 1
+		and restored.active_contract_id == active_before,
+		"rejected M-613 choice leaves saved balance unchanged")
+	var rejected_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var rejected_payload: Dictionary = JSON.parse_string(rejected_file.get_as_text())
+	rejected_file.close()
+	check(rejected_payload.mara_favor_balance == 1,
+		"rejected choice does not rewrite the saved balance")
+	var due: int = restored.get_contract(&"silent_partner").deadline_at_minute
+	restored.advance_minutes(due - restored.current_minute())
+	check(restored.get_contract(&"silent_partner").status == &"failed"
+		and restored.mara_favor_balance == 1,
+		"expired M-613 preserves positive balance")
+	var expired_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var expired_payload: Dictionary = JSON.parse_string(expired_file.get_as_text())
+	expired_file.close()
+	check(expired_payload.mara_favor_balance == 1,
+		"expired M-613 persists the unchanged positive balance")
+	restored.reset_profile()
+	gs.reset_profile()
+	gs.free()
+	restored.free()
+
 
 func _test_deadline_round_trip() -> void:
 	var gs := GameStateScript.new()
@@ -214,6 +347,8 @@ func _test_legacy_deadline_migration(version: int) -> void:
 	gs.reset_profile()
 	check(gs.accept_contract(&"cold_chain_delivery"), "legacy fixture has an active job")
 	var payload: Dictionary = gs._profile_payload()
+	payload.erase("mara_favor_balance")
+	payload["mara_favor_owed"] = false
 	payload.version = version
 	payload.day = 27
 	payload.minute_of_day = 321
@@ -235,8 +370,10 @@ func _test_legacy_deadline_migration(version: int) -> void:
 	var migrated_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	var persisted: Dictionary = JSON.parse_string(migrated_file.get_as_text())
 	migrated_file.close()
-	check(persisted.version == 4 and persisted.contracts[0].prep_paid_credits == 0,
-		"legacy migration persists the complete current schema without charging preparation")
+	check(persisted.version == 5 and persisted.mara_favor_balance == 0
+		and not persisted.has("mara_favor_owed")
+		and persisted.contracts[0].prep_paid_credits == 0,
+		"legacy migration persists the complete v5 schema without charging preparation")
 	restored.advance_minutes(1)
 	var again := GameStateScript.new()
 	check(again.load_profile() and again.get_contract(&"cold_chain_delivery").deadline_at_minute == c.deadline_at_minute,
@@ -295,7 +432,6 @@ func _test_preparation_round_trip() -> void:
 	for outcome: StringName in [&"precleared_documents", &"pay_fee", &"abort"]:
 		var gs := GameStateScript.new()
 		gs.reset_profile()
-		gs.mara_favor_owed = true
 		check(gs.accept_contract(&"cold_chain_delivery")
 			and gs.prepare_contract(&"cold_chain_delivery"), "round-trip purchases preparation")
 		var due: int = gs.get_contract(&"cold_chain_delivery").deadline_at_minute
@@ -316,8 +452,9 @@ func _test_preparation_round_trip() -> void:
 		var again := GameStateScript.new()
 		check(again.load_profile() and again.credits == result_credits
 			and again.get_contract(c.id).prep_paid_credits == 300
-			and again.get_contract(c.id).resolution_id == outcome and again.mara_favor_owed,
-			"terminal reload preserves spent preparation and existing debt")
+			and again.get_contract(c.id).resolution_id == outcome
+			and again.mara_favor_balance == 0,
+			"terminal reload preserves spent preparation and square balance")
 		again.reset_profile()
 		gs.free()
 		restored.free()
@@ -327,11 +464,12 @@ func _test_v3_preparation_migration() -> void:
 	for at_complication: bool in [false, true]:
 		var gs := GameStateScript.new()
 		gs.reset_profile()
-		gs.mara_favor_owed = true
 		check(gs.accept_contract(&"cold_chain_delivery"), "version-3 fixture accepts on time")
 		if at_complication:
 			check(gs.proceed_contract(&"cold_chain_delivery"), "legacy fixture departs unprepared")
 		var payload: Dictionary = gs._profile_payload()
+		payload.erase("mara_favor_balance")
+		payload["mara_favor_owed"] = true
 		payload.version = 3
 		for record: Dictionary in payload.contracts:
 			record.erase("prep_paid_credits")
@@ -340,15 +478,17 @@ func _test_v3_preparation_migration() -> void:
 		_write_deadline_profile(payload)
 		var restored := GameStateScript.new()
 		check(restored.load_profile() and restored.current_minute() == clock
-			and restored.credits == gs.credits and restored.mara_favor_owed
+			and restored.credits == gs.credits and restored.mara_favor_balance == -1
 			and restored.get_contract(&"cold_chain_delivery").deadline_at_minute == due
 			and restored.get_contract(&"cold_chain_delivery").prep_paid_credits == 0,
 			"version-3 migration preserves progress and does not renew the cutoff")
 		var persisted_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 		var persisted: Dictionary = JSON.parse_string(persisted_file.get_as_text())
 		persisted_file.close()
-		check(persisted.version == 4 and persisted.contracts[0].prep_paid_credits == 0,
-			"migration writes the new on-disk schema immediately")
+		check(persisted.version == 5 and persisted.mara_favor_balance == -1
+			and not persisted.has("mara_favor_owed")
+			and persisted.contracts[0].prep_paid_credits == 0,
+			"migration writes the v5 on-disk schema immediately")
 		var again := GameStateScript.new()
 		check(again.load_profile()
 			and again.get_contract(&"cold_chain_delivery").deadline_at_minute == due,
@@ -420,6 +560,8 @@ func _test_invalid_preparation_profiles() -> void:
 	cases.append(unpaid_result)
 	for version: int in [2, 3]:
 		var legacy_result: Dictionary = unpaid_result.duplicate(true)
+		legacy_result.erase("mara_favor_balance")
+		legacy_result["mara_favor_owed"] = false
 		legacy_result.version = version
 		cases.append(legacy_result)
 	for invalid: Dictionary in cases:

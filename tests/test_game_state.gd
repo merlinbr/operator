@@ -132,19 +132,126 @@ func _test_silent_partner_heat_choices() -> void:
 				"high-Heat outcome setup reaches M-613")
 			var payout_before: int = outcome.credits
 			var standing_before: int = outcome.standing_for(&"mara")
-			var favor_before: bool = outcome.mara_favor_owed
+			var favor_before: int = outcome.mara_favor_balance
 			check(outcome.resolve_contract(&"silent_partner", &"buy_intermediary_silence"),
 				"high-Heat intermediary silence resolves")
 			check(outcome.credits == payout_before + 4300 and outcome.heat == 6,
 				"intermediary silence pays 4,300 CR without more Heat")
 			check(outcome.standing_for(&"mara") == standing_before
-				and outcome.mara_favor_owed == favor_before
+				and outcome.mara_favor_balance == favor_before
 				and outcome.get_contract(&"silent_partner").status == &"completed",
 				"intermediary silence preserves standing and favor and completes M-613")
 			outcome.reset_profile()
 			outcome.free()
 		gs.reset_profile()
 		gs.free()
+func _test_mara_favor_aftermath() -> void:
+	var credit := GameStateScript.new()
+	_resolve_c1042(credit, &"pay_fee")
+	check(credit.accept_contract(&"dead_drop_audit")
+		and credit.proceed_contract(&"dead_drop_audit")
+		and credit.resolve_contract(&"dead_drop_audit", &"trace_tag")
+		and credit.mara_favor_balance == 1, "tracing earns Mara credit")
+	check(credit.accept_contract(&"data_retrieval")
+		and credit.proceed_contract(&"data_retrieval")
+		and credit.resolve_contract(&"data_retrieval", &"spoof_credentials"),
+		"D-207 publishes Silent Partner at Trusted Mara standing")
+	check(credit.accept_contract(&"silent_partner")
+		and credit.proceed_contract(&"silent_partner"), "favor path reaches M-613")
+	credit.heat = 6
+	var ids := _choice_ids(credit.get_contract(&"silent_partner"))
+	check(ids.has(&"call_in_mara_favor") and ids.has(&"buy_intermediary_silence")
+		and ids.has(&"mirror_archive"), "favor route coexists with high-Heat routes")
+	var before := credit.credits
+	check(credit.resolve_contract(&"silent_partner", &"call_in_mara_favor")
+		and credit.mara_favor_balance == 0 and credit.credits == before + 5600
+		and credit.heat == 6, "favor spends for full payout without added Heat")
+	credit.reset_profile()
+	credit.free()
+
+	var canceled := GameStateScript.new()
+	_resolve_c1042(canceled, &"call_mara")
+	check(canceled.mara_favor_balance == -1, "call Mara creates debt for cancellation")
+	check(canceled.accept_contract(&"dead_drop_audit")
+		and canceled.proceed_contract(&"dead_drop_audit")
+		and canceled.resolve_contract(&"dead_drop_audit", &"trace_tag")
+		and canceled.mara_favor_balance == 0,
+		"tracing while in debt cancels the favor")
+	check(canceled.accept_contract(&"data_retrieval")
+		and canceled.proceed_contract(&"data_retrieval")
+		and canceled.resolve_contract(&"data_retrieval", &"buy_token")
+		and canceled.accept_contract(&"clinic_asset_recovery")
+		and canceled.proceed_contract(&"clinic_asset_recovery")
+		and not _choice_ids(canceled.get_contract(&"clinic_asset_recovery")).has(
+			&"settle_mara_favor"),
+		"debt cancellation hides R-311 hand delivery")
+	canceled.reset_profile()
+	canceled.free()
+
+	var settled: Variant = _at_silent_partner()
+	check(settled.accept_contract(&"clinic_asset_recovery")
+		and settled.proceed_contract(&"clinic_asset_recovery"),
+		"debt settlement route reaches R-311")
+	var settlement_before: int = settled.credits
+	check(settled.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor")
+		and settled.mara_favor_balance == 0
+		and settled.credits == settlement_before + 2600,
+		"hand delivery settles debt and keeps the 2,600 CR reward")
+	settled.reset_profile()
+	settled.free()
+
+	var negative: Variant = _at_silent_partner()
+	check(negative.accept_contract(&"silent_partner")
+		and negative.proceed_contract(&"silent_partner"),
+		"negative balance reaches M-613")
+	var negative_credits: int = negative.credits
+	var negative_active: StringName = negative.active_contract_id
+	check(not negative.resolve_contract(&"silent_partner", &"call_in_mara_favor")
+		and negative.credits == negative_credits
+		and negative.mara_favor_balance == -1
+		and negative.active_contract_id == negative_active
+		and negative.get_contract(&"silent_partner").phase == &"customs_hold",
+		"negative balance rejects the favor route without mutation")
+	negative.reset_profile()
+	negative.free()
+
+	var square := GameStateScript.new()
+	_resolve_c1042(square, &"pay_fee")
+	check(square.accept_contract(&"data_retrieval")
+		and square.proceed_contract(&"data_retrieval")
+		and square.resolve_contract(&"data_retrieval", &"spoof_credentials")
+		and square.accept_contract(&"silent_partner")
+		and square.proceed_contract(&"silent_partner")
+		and square.mara_favor_balance == 0,
+		"zero balance reaches M-613 through ordinary work")
+	var square_credits := square.credits
+	var square_active := square.active_contract_id
+	check(not square.resolve_contract(&"silent_partner", &"call_in_mara_favor")
+		and square.credits == square_credits
+		and square.mara_favor_balance == 0
+		and square.active_contract_id == square_active
+		and square.get_contract(&"silent_partner").phase == &"customs_hold",
+		"zero balance rejects the favor route without mutation")
+	square.reset_profile()
+	square.free()
+
+	var paid := GameStateScript.new()
+	check(paid.accept_contract(&"cold_chain_delivery")
+		and paid.proceed_contract(&"cold_chain_delivery")
+		and paid.resolve_contract(&"cold_chain_delivery", &"pay_fee")
+		and paid.mara_favor_balance == 0,
+		"paid C-1042 route preserves a square balance")
+	paid.reset_profile()
+	paid.free()
+	var aborted := GameStateScript.new()
+	check(aborted.accept_contract(&"cold_chain_delivery")
+		and aborted.proceed_contract(&"cold_chain_delivery")
+		and aborted.resolve_contract(&"cold_chain_delivery", &"abort")
+		and aborted.mara_favor_balance == 0,
+		"abort route preserves a square balance")
+	aborted.reset_profile()
+	aborted.free()
+
 
 func _call_go_to_ground(gs: Object) -> bool:
 	if not gs.has_method("go_to_ground"):
@@ -270,10 +377,19 @@ func _run() -> void:
 		"Trusted Mara work rejects a Known operator")
 	var standing_gs := GameStateScript.new()
 	var changed_contacts := [0]
-	standing_gs.contacts_changed.connect(func() -> void: changed_contacts[0] += 1)
+	var mara_refreshes: Array[Dictionary] = []
+	standing_gs.contacts_changed.connect(func() -> void:
+		changed_contacts[0] += 1
+		for contact: Dictionary in standing_gs.contact_snapshot():
+			if contact.id == &"mara":
+				mara_refreshes.append(contact))
 	_resolve_c1042(standing_gs, &"call_mara")
-	check(standing_gs.standing_for(&"mara") == 2 and changed_contacts[0] == 1,
-		"qualifying resolution raises only Mara to Trusted")
+	check(standing_gs.standing_for(&"mara") == 2
+		and standing_gs.mara_favor_balance == -1
+		and changed_contacts[0] == 2 and mara_refreshes.size() == 2
+		and mara_refreshes[-1].standing == 2
+		and mara_refreshes[-1].favor_label == "YOU OWE MARA",
+		"qualifying resolution refreshes Mara standing and signed debt")
 	standing_gs.free()
 
 	var got_credits := [0]
@@ -389,7 +505,8 @@ func _run() -> void:
 	var mara_gs: Variant = _at_customs()
 	check(mara_gs.resolve_contract(&"cold_chain_delivery", &"call_mara"), "Mara resolves")
 	check(mara_gs.credits == mara_gs.START_CREDITS + 1400, "Mara awards full payout")
-	check(mara_gs.heat == 2 and mara_gs.mara_favor_owed, "Mara creates only the favor boolean")
+	check(mara_gs.heat == 2 and mara_gs.mara_favor_balance == -1,
+		"Mara creates a signed favor debt")
 	check(mara_gs.active_contract_id == &"", "Mara clears active contract")
 	check(mara_gs.messages.any(func(message: Dictionary) -> bool: return message.sender == "MARA"),
 		"Mara resolution records a Comms message")
@@ -481,9 +598,9 @@ func _run() -> void:
 		"R-311 exposes favor settlement when owed")
 	check(favor_portfolio_gs.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor"),
 		"favor settlement resolves")
-	check(not favor_portfolio_gs.mara_favor_owed
+	check(favor_portfolio_gs.mara_favor_balance == 0
 		and favor_portfolio_gs.credits == favor_portfolio_gs.START_CREDITS + 1400 + 3800 + 2600,
-		"favor settlement clears the flag and applies its lower reward")
+		"favor settlement clears the signed balance and applies its lower reward")
 	favor_portfolio_gs.free()
 
 	var no_favor_gs := GameStateScript.new()
@@ -569,6 +686,7 @@ func _run() -> void:
 
 	_test_heat_thresholds()
 	_test_silent_partner_heat_choices()
+	_test_mara_favor_aftermath()
 
 	_test_go_to_ground()
 	_test_heat_recross_after_recovery()

@@ -19,7 +19,7 @@ const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const PROFILE_PATH := "user://operator_save.json"
 const PROFILE_TEMP_PATH := "user://operator_save.json.tmp"
 const PROFILE_BACKUP_PATH := "user://operator_save.json.bak"
-const PROFILE_VERSION := 4
+const PROFILE_VERSION := 5
 
 const HEAT_WARNING_BANDS := [
 	{"threshold": 3, "name": "ELEVATED",
@@ -45,7 +45,7 @@ const DEFAULT_MESSAGES: Array[Dictionary] = [
 
 var contracts: Array[Dictionary] = ContractCatalog.all()
 var active_contract_id: StringName = &""
-var mara_favor_owed := false
+var mara_favor_balance: int = 0
 var messages: Array[Dictionary] = DEFAULT_MESSAGES.duplicate(true)
 var contact_standing: Dictionary = _default_contact_standing()
 
@@ -91,7 +91,7 @@ func reset_profile() -> void:
 	var old_next_rent_due_day := next_rent_due_day
 	contracts = ContractCatalog.all()
 	active_contract_id = &""
-	mara_favor_owed = false
+	mara_favor_balance = 0
 	messages = DEFAULT_MESSAGES.duplicate(true)
 	credits = START_CREDITS
 	district = START_DISTRICT
@@ -164,6 +164,10 @@ func load_profile() -> bool:
 				parsed = _migrate_v3_profile(parsed)
 				if not _validate_profile(parsed).is_empty():
 					continue
+			if int(parsed.version) == 4:
+				parsed = _migrate_v4_profile(parsed)
+				if not _validate_profile(parsed).is_empty():
+					continue
 			_apply_profile(parsed)
 			var reconciled := _settle_contract_deadlines(current_minute())
 			if migrated or reconciled:
@@ -189,6 +193,13 @@ func _read_profile_candidate(path: String) -> Variant:
 	var parsed: Dictionary = parser.data
 	if _is_int_value(parsed.get("version", null)) and int(parsed.version) == 1:
 		parsed = _migrate_v1_profile(parsed)
+	if _is_int_value(parsed.get("version", null)) \
+			and int(parsed.version) == PROFILE_VERSION \
+			and typeof(parsed.get("mara_favor_balance", null)) == TYPE_FLOAT:
+		var raw_balance: float = parsed.mara_favor_balance
+		if is_finite(raw_balance) and raw_balance >= -1.0 \
+				and raw_balance <= 1.0 and raw_balance == round(raw_balance):
+			parsed.mara_favor_balance = int(raw_balance)
 	if not _validate_profile(parsed).is_empty():
 		return null
 	return parsed
@@ -212,7 +223,7 @@ func _profile_payload() -> Dictionary:
 		"active_contract_id": active_contract_id,
 		"contact_standing": contact_standing.duplicate(true),
 		"contracts": contracts.duplicate(true),
-		"mara_favor_owed": mara_favor_owed,
+		"mara_favor_balance": mara_favor_balance,
 		"messages": messages.duplicate(true),
 		"current_residence_id": current_residence_id,
 		"owned_residence_ids": owned_residence_ids,
@@ -234,12 +245,20 @@ func contact_snapshot() -> Array[Dictionary]:
 	var snapshot: Array[Dictionary] = []
 	for contact: Dictionary in ContactCatalog.all():
 		var standing := standing_for(contact.id)
-		snapshot.append({
+		var entry := {
 			"id": contact.id,
 			"display_name": contact.display_name,
 			"standing": standing,
 			"standing_label": ContactCatalog.standing_label(standing),
-		})
+		}
+		if contact.id == &"mara":
+			var favor_label := "SQUARE"
+			if mara_favor_balance < 0:
+				favor_label = "YOU OWE MARA"
+			elif mara_favor_balance > 0:
+				favor_label = "MARA OWES YOU"
+			entry["favor_label"] = favor_label
+		snapshot.append(entry)
 	return snapshot
 
 func _validate_contact_standing(raw: Variant) -> bool:
@@ -302,14 +321,25 @@ func _migrate_v3_profile(data: Dictionary) -> Dictionary:
 	migrated.version = 4
 	return migrated
 
+func _migrate_v4_profile(data: Dictionary) -> Dictionary:
+	var migrated := data.duplicate(true)
+	migrated.mara_favor_balance = -1 if data.mara_favor_owed else 0
+	migrated.erase("mara_favor_owed")
+	migrated.version = 5
+	return migrated
+
+
 func _validate_profile(data: Dictionary) -> String:
 	for key in _profile_payload().keys():
+		if key == "mara_favor_balance":
+			continue
 		if not data.has(key):
 			return "profile is missing '%s'" % key
 	if not _is_int_value(data.version):
 		return "profile version is incompatible"
 	var profile_version := int(data.version)
-	if profile_version != 2 and profile_version != 3 and profile_version != 4:
+	if profile_version != 2 and profile_version != 3 \
+			and profile_version != 4 and profile_version != 5:
 		return "profile version is incompatible"
 	if not _is_int_value(data.credits) or data.credits < 0:
 		return "profile Credits are invalid"
@@ -325,8 +355,13 @@ func _validate_profile(data: Dictionary) -> String:
 		return "profile workspace state is invalid"
 	if not _is_string_value(data.active_module) or not _is_string_value(data.active_contract_id):
 		return "profile active state is invalid"
-	if typeof(data.mara_favor_owed) != TYPE_BOOL:
-		return "profile favor state is invalid"
+	if profile_version < PROFILE_VERSION:
+		if typeof(data.get("mara_favor_owed", null)) != TYPE_BOOL:
+			return "profile favor state is invalid"
+	else:
+		var raw_balance: Variant = data.get("mara_favor_balance", null)
+		if typeof(raw_balance) != TYPE_INT or int(raw_balance) < -1 or int(raw_balance) > 1:
+			return "profile favor state is invalid"
 	if not _validate_contact_standing(data.contact_standing):
 		return "profile contact standing is invalid"
 	var contract_reason := _validate_contracts(data.contracts,
@@ -390,7 +425,7 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 					return "profile deadline outcome is invalid"
 			elif status == &"expired":
 				return "profile expired contract reason is invalid"
-		if profile_version == 4:
+		if profile_version >= 4:
 			if not _is_int_value(record.get("prep_paid_credits", null)):
 				return "profile preparation spending is invalid"
 			var paid := int(record.prep_paid_credits)
@@ -497,7 +532,7 @@ func _apply_profile(data: Dictionary) -> void:
 		active_module = &"home"
 	module_open = data.module_open
 	active_contract_id = StringName(str(data.active_contract_id))
-	mara_favor_owed = data.mara_favor_owed
+	mara_favor_balance = int(data.mara_favor_balance)
 	var restored_contracts: Array[Dictionary] = ContractCatalog.all()
 	for index in restored_contracts.size():
 		var record: Dictionary = data.contracts[index]
@@ -701,7 +736,7 @@ func get_contract(id: StringName) -> Dictionary:
 	if snapshot.has("preparation"):
 		snapshot.preparation.choice = _choice(snapshot.complication.choices,
 			StringName(snapshot.preparation.choice_id))
-	if snapshot.has("complication"):
+	if snapshot.has("complication") and snapshot.phase != &"resolved":
 		snapshot.complication.choices = _available_choices(contracts[index])
 	return snapshot
 
@@ -716,7 +751,8 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 			continue
 		if choice.has("min_heat") and heat < int(choice.min_heat):
 			continue
-		if choice.get("requires_mara_favor", false) and not mara_favor_owed:
+		if choice.has("requires_mara_balance") \
+				and mara_favor_balance != int(choice.requires_mara_balance):
 			continue
 		available.append(choice)
 	return available
@@ -852,19 +888,25 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	if choice.heat_delta != 0:
 		heat += choice.heat_delta
 	_publish_heat_crossings(previous_heat, heat)
+	var previous_favor := mara_favor_balance
+	if choice.has("mara_favor_delta"):
+		mara_favor_balance = clampi(
+			mara_favor_balance + int(choice.mara_favor_delta), -1, 1)
+		if mara_favor_balance != previous_favor:
+			contacts_changed.emit()
 	if choice.contact_standing_delta > 0:
 		_raise_contact_standing(contract.contact_id, int(choice.contact_standing_delta))
-	if choice.get("sets_mara_favor_owed", false):
-		mara_favor_owed = true
-	if choice.get("clears_mara_favor", false):
-		mara_favor_owed = false
 	_unlock_contracts(choice.unlocks_contract_ids, current_minute())
 	contract.status = choice.terminal_status
 	contract.phase = &"resolved"
 	contract.resolution_id = choice_id
 	active_contract_id = &""
 	contracts_changed.emit()
-	_push_resolution_feedback(choice)
+	var feedback_choice: Dictionary = choice
+	if choice.id == &"trace_tag" and previous_favor == -1:
+		feedback_choice = choice.duplicate(true)
+		feedback_choice.message_preview = "We're square. You found the leak without waking it."
+	_push_resolution_feedback(feedback_choice)
 	contract_resolved.emit(id, contract.status)
 	save_profile()
 	return true

@@ -44,7 +44,7 @@ func _test_purchase_and_resolution() -> void:
 	check(gs.current_minute() == clock
 		and gs.get_contract(DELIVERY).deadline_at_minute == before.deadline_at_minute
 		and gs.heat == heat and gs.standing_for(&"mara") == standing
-		and not gs.mara_favor_owed, "purchase changes only paid state and Credits")
+		and gs.mara_favor_balance == 0, "purchase changes only paid state and Credits")
 	var count: int = feedback.size()
 	check(count == 1 and not gs.prepare_contract(DELIVERY)
 		and feedback.size() == count and gs.credits == start - 300,
@@ -57,7 +57,7 @@ func _test_purchase_and_resolution() -> void:
 	check(gs.proceed_contract(DELIVERY) and gs.resolve_contract(DELIVERY, PAPERS),
 		"purchased response completes the job")
 	check(gs.credits == start + 1100 and gs.heat == heat
-		and gs.standing_for(&"mara") == standing + 1 and not gs.mara_favor_owed,
+		and gs.standing_for(&"mara") == standing + 1 and gs.mara_favor_balance == 0,
 		"outcome earns trust without debt or a second charge")
 	check(gs.is_contract_available(gs.get_contract(DATA))
 		and gs.get_contract(DATA).prep_paid_credits == 0,
@@ -110,7 +110,6 @@ func _test_unused_and_failed_preparation() -> void:
 	for choice_id: StringName in [&"pay_fee", &"abort", &"deadline_missed"]:
 		var gs := GameStateScript.new()
 		var start: int = gs.credits
-		gs.mara_favor_owed = true
 		check(gs.accept_contract(DELIVERY) and gs.prepare_contract(DELIVERY),
 			"sunk-cost fixture purchases preparation")
 		if choice_id == &"deadline_missed":
@@ -123,15 +122,21 @@ func _test_unused_and_failed_preparation() -> void:
 			check(gs.get_contract(DELIVERY).resolution_id == &"deadline_missed"
 				and not gs.resolve_contract(DELIVERY, PAPERS), "deadline blocks purchased response")
 		var payout := 1150 if choice_id == &"pay_fee" else 0
-		check(gs.credits == start - 300 + payout and gs.mara_favor_owed
+		check(gs.credits == start - 300 + payout
+			and gs.mara_favor_balance == 0
 			and gs.standing_for(&"mara") == 1 and gs.heat == 2,
 			"unused/failed preparation stays spent without outcome benefits")
 		gs.free()
 	var owed := GameStateScript.new()
-	owed.mara_favor_owed = true
-	check(owed.accept_contract(DELIVERY) and owed.prepare_contract(DELIVERY)
-		and owed.proceed_contract(DELIVERY) and owed.resolve_contract(DELIVERY, PAPERS)
-		and owed.mara_favor_owed, "prepared success does not erase an existing debt")
+	check(owed.accept_contract(DELIVERY)
+		and owed.proceed_contract(DELIVERY)
+		and owed.resolve_contract(DELIVERY, &"call_mara")
+		and owed.mara_favor_balance == -1,
+		"real favor fixture creates debt before prepared work")
+	check(owed.accept_contract(DATA) and owed.prepare_contract(DATA)
+		and owed.proceed_contract(DATA) and owed.resolve_contract(DATA, COVER)
+		and owed.mara_favor_balance == -1,
+		"prepared success does not erase an existing debt")
 	owed.free()
 
 func _data_outcome(high_heat: bool, trusted: bool, prepared: bool,
