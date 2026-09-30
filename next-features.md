@@ -4,7 +4,7 @@ Cross-document review of `feature-ideas-a.md`, `feature-ideas-b.md`, `feature-id
 
 ## Verdict
 
-The four proposals converge on active Heat and the missing Prepare step. Deadline enforcement, optional preparation, and active Heat are now implemented; favor/aftermath remains the next depth-first work. Broader systems remain deferred.
+The four proposals converge on active Heat and the missing Prepare step. Deadline enforcement, optional preparation, active Heat, and the Mara favor/aftermath depth pass are now implemented. Broader systems remain deferred.
 
 ## What each document proposes
 
@@ -36,13 +36,13 @@ Grounding, checked against code (`autoload/game_state.gd`, `data/contracts/contr
 - **Deadlines are enforced, not display-only.** The approved [publication-relative deadline design](docs/superpowers/specs/2026-09-05-contract-deadlines-design.md) uses authored `deadline_window_minutes` to assign each published contract a persistent `deadline_at_minute`; the catalog no longer uses fixed `deadline_day` / `deadline_minute` fields. Unaccepted offers expire and active jobs fail at `now >= deadline`, including during same-day or long clock advances. Acceptance and reload do not renew the saved window.
 - **Heat has authored consequences.** Upward crossings of 3 / 6 / 9 publish one highlighted ticker and one SYSTEM message per band. Go to Ground advances 24 hours, settles rent and deadlines, then reduces Heat by 1; ordinary Rest and calendar advancement do not reduce Heat. Silent Partner's custodian route is available through Heat 5, with a lower-payout intermediary route at Heat 6+.
 - **Alerts has been removed.** New profiles omit the legacy field; old v4 profiles still load, and a saved `active_module: alerts` normalizes to Home.
-- **Favor system is one boolean.** `mara_favor_owed: bool` with `requires_mara_favor` / `sets_mara_favor_owed` / `clears_mara_favor` choice flags. Working, but single-contact and one-directional.
+- **Mara favors work in both directions.** `mara_favor_balance: int` is capped at `-1` (you owe Mara), `0` (square), or `+1` (Mara owes you). Calling Mara creates debt; tracing M-508 settles debt or earns credit; R-311 hand delivery settles debt; M-613 can spend credit for +5,600 CR without added Heat, even at Heat 6+. Comms shows the balance and favor-changing actions have explicit previews and an accent. Saves are v5; v1-v4 migrations preserve deadlines and preparation.
 - **The rail reserves the remaining breadth systems.** `resources/module_registry.tres` contains locked modules `crew`, `market`, and `map`. Alerts is no longer registered or rendered.
 - **Prior design docs deferred these systems deliberately.** The four idea documents proposed revisiting those deferrals. Deadlines, Contact standing, preparation, and active Heat are implemented; broad systems such as inventory, crew, factions, economy, and maps remain deferred.
 
 ## Recommendation
 
-Deadline enforcement, optional preparation, and active Heat are implemented. Favor/aftermath is the remaining depth-first direction; no new subsystem is required for that pass.
+Deadline enforcement, optional preparation, active Heat, and Mara favor/aftermath are implemented. The depth pass uses existing authored contracts and panels, not a new subsystem.
 
 **Implemented — contract deadlines.** The [approved design](docs/superpowers/specs/2026-09-05-contract-deadlines-design.md) uses publication windows rather than fixed calendar dates. Published offers and active jobs retain their calculated absolute cutoff across acceptance, save, and reload; offers become `expired`, active jobs become failed, and both publish abort-path successors without rewards or Heat, standing, or favor changes.
 
@@ -50,10 +50,10 @@ Deadline enforcement, optional preparation, and active Heat are implemented. Fav
 
 **Implemented — optional contract preparation.** Cold-Chain Delivery and Data Retrieval offer an optional preparation purchase on the ready screen (no `preparing` phase): a one-time upfront payment unlocks one additional `requires_prep` response without replacing basic options or advancing time, gated by Credits and surfaced through the existing `_available_choices()` filter — the same mechanism the heat/favor flags use. This is C#4 and the preparation recommendation of D, the cheap v1 of A#1/B#1. No inventory system, no asset catalog; the other five contracts have no preparation purchase. See the [approved preparation design](docs/superpowers/specs/2026-09-05-contract-preparation-design.md).
 
-**3. Aftermath + favor ledger.** Each resolution already emits an authored `message_preview`; add a delayed follow-up message or `flags`/`threads` entry that later contracts or messages can reference (C#5, D#3). Generalize `mara_favor_owed: bool` to a per-contact favor integer (owed both directions) with the existing three choice flags preserved (C#6, D#2). Cheap narrative consequence that makes the 7-contract portfolio replayable without new content systems.
+**Implemented — Mara favor/aftermath.** The [approved design](docs/superpowers/specs/2026-09-29-mara-favor-aftermath-design.md) replaces the one-way boolean with a signed Mara-only balance. Tracing M-508 can earn the credit spent on M-613's optional clean route; opposite favors cancel before creating credit. Existing paid, risky, abort, and preparation routes retain their gates and rewards. The lasting balance and changed later choices are the aftermath, with ordinary resolution messages retained. No timed follow-ups, event queues, extra contracts, or per-contact ledger were added. Verified with all 16 project suites and a rendered main-scene smoke through debt, credit, and high-Heat favor spending.
 
 **Not next (defer explicitly):** inventory/assets (A#1, B#1), crew roster (A#2, B#2), procedural contract generator (B#6), district travel map (B#5), market, faction matrix. Each is a real system and matches the original vision — build them after the contract loop has depth. When districts arrive, D#4 (authored venues, no map) is the cheap entry point; the rail's locked `map` module already exists.
 
 ## If only two
 
-**Favor/aftermath remains the next depth pass.** Generalize `mara_favor_owed: bool` to a per-contact favor integer and add authored follow-up consequences that later contracts or messages can reference.
+**The minimal depth batch is complete.** Mara's signed favors and M-508 -> M-613 authored consequence now join deadlines, preparation, and active Heat. Add per-contact favor expansion only when a second real relationship needs it; separate timed follow-ups remain unimplemented. Inventory, crew, market, and maps remain deferred.
