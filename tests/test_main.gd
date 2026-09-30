@@ -35,14 +35,25 @@ func _finish_after_ready() -> void:
 	finish()
 
 func _run() -> void:
+	_check_restored_workspace(&"dossier", false, false, &"dossier", false)
+	_check_restored_workspace(&"dossier", true, true, &"dossier", true)
+	_check_restored_workspace(&"missing", false, false, &"home", true)
+	_check_restored_workspace(&"crew", false, false, &"home", true)
 	var gs := GameStateScript.new()
 	gs.name = "GameState"
+	gs.active_module = &"dossier"
+	gs.module_open = true
 	root.add_child(gs)
 
 	var main := MainScene.instantiate()
 	root.add_child(main)
 	_main = main
 	_gs = gs
+	check(gs.active_module == &"dossier" and gs.module_open
+		and main.primary_host.visible,
+		"startup restores saved Dossier without toggling it closed")
+	if gs.active_module != &"home":
+		main.select_module(&"home")
 
 	var workspace: Control = main.get_node("Workspace")
 	var environment: Control = main.get_node("EnvironmentLayer")
@@ -144,6 +155,17 @@ func _run() -> void:
 	main.close_topmost()
 	check(not context.visible and main._selected_contract_id == &"",
 		"Esc clears the selected contract with its context")
+	c1042_row.pressed.emit()
+	rail.get_button(&"dossier").pressed.emit()
+	check(gs.active_module == &"dossier" and gs.module_open and primary.visible
+		and not context.visible and context.get_child_count() == 0,
+		"Dossier switch closes the previous contract context")
+	main.close_topmost()
+	check(not gs.module_open and not primary.visible and gs.active_module == &"dossier",
+		"close hides Dossier without changing its selected module")
+	rail.get_button(&"dossier").pressed.emit()
+	check(gs.module_open and primary.visible, "Dossier reopens through its rail button")
+	main.select_module(&"contracts")
 
 	# a separate offer run proves CLOSE is non-mutating
 	c1042_row = _button(primary, "COLD-CHAIN DELIVERY   1,400 CR")
@@ -363,6 +385,24 @@ func _run() -> void:
 	legacy_root.queue_free()
 	gs.reset_profile()
 
+
+func _check_restored_workspace(id: StringName, open: bool, collapsed: bool,
+		expected_id: StringName, expected_open: bool) -> void:
+	var holder := Node.new()
+	root.add_child(holder)
+	var state := GameStateScript.new()
+	state.name = "GameState"
+	state.active_module = id
+	state.module_open = open
+	state.workspace_collapsed = collapsed
+	holder.add_child(state)
+	var shell := MainScene.instantiate()
+	holder.add_child(shell)
+	check(state.active_module == expected_id and state.module_open == expected_open
+		and state.workspace_collapsed == collapsed
+		and shell.primary_host.visible == (expected_open and not collapsed),
+		"startup preserves workspace flags or falls back for %s" % id)
+	holder.free()
 
 func _button(control: Control, text: String) -> Button:
 	for button: Button in control.find_children("*", "Button", true, false):

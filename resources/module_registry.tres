@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ModuleRegistry" load_steps=9 format=3]
+[gd_resource type="Resource" script_class="ModuleRegistry" load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/module_registry.gd" id="1_reg"]
 [ext_resource type="Script" path="res://scripts/module_def.gd" id="2_def"]
@@ -30,6 +30,15 @@ group = &"core"
 size_class = &"narrow"
 unlocked = true
 
+[sub_resource type="Resource" id="def_dossier"]
+script = ExtResource("2_def")
+id = &"dossier"
+display_name = "DOSSIER"
+glyph = "▤"
+group = &"core"
+size_class = &"normal"
+unlocked = true
+
 [sub_resource type="Resource" id="def_crew"]
 script = ExtResource("2_def")
 id = &"crew"
@@ -57,4 +66,4 @@ unlocked = false
 
 [resource]
 script = ExtResource("1_reg")
-modules = [SubResource("def_home"), SubResource("def_comms"), SubResource("def_contracts"), SubResource("def_crew"), SubResource("def_market"), SubResource("def_map")]
+modules = [SubResource("def_home"), SubResource("def_comms"), SubResource("def_contracts"), SubResource("def_dossier"), SubResource("def_crew"), SubResource("def_market"), SubResource("def_map")]

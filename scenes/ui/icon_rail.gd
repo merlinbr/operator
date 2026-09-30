@@ -57,7 +57,7 @@ func _rebuild() -> void:
 		btn.text = def.glyph
 		btn.tooltip_text = def.display_name if def.unlocked else def.display_name + " (LOCKED)"
 		btn.disabled = not def.unlocked
-		btn.focus_mode = Control.FOCUS_NONE
+		btn.focus_mode = Control.FOCUS_ALL if def.unlocked else Control.FOCUS_NONE
 		btn.custom_minimum_size = Vector2(44, 40)
 		btn.add_theme_font_size_override("font_size", 18)
 		if not def.unlocked:

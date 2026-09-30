@@ -91,7 +91,7 @@ Run from the project root with the existing configured Godot binary. For the smo
 - Produces `dossier_snapshot() -> Dictionary` with keys `signature` (`clean`, `aggressive`, `community`: integers), `heat` (integer), `heat_band` (String), `contacts` (existing contact snapshot), `operations` (Array[Dictionary]), `expired_offers` (Array[Dictionary]).
 - Operation rows contain `id`, `code`, `title`, `status`, and `outcome`. `outcome` is the authored selected choice label or `DEADLINE MISSED`. Expired rows contain `id`, `code`, and `title`. All rows are new dictionaries; no choices or authoritative records are returned.
 
-- [ ] **Step 1: Add the focused behavioral test suite.** Use the existing base class and public gameplay flow. The core suite below gives concrete scenarios; no per-function framework or copy assertions. The wrapper above protects profile writes made by these public APIs.
+- [x] **Step 1: Add the focused behavioral test suite.** Use the existing base class and public gameplay flow. The core suite below gives concrete scenarios; no per-function framework or copy assertions. The wrapper above protects profile writes made by these public APIs.
 
 ```gdscript
 extends "res://tests/test_base.gd"
@@ -205,7 +205,7 @@ func _run() -> void:
     expired.free()
 ```
 
-- [ ] **Step 2: Run the new suite once before implementation.** Inside the profile safety wrapper:
+- [x] **Step 2: Run the new suite once before implementation.** Inside the profile safety wrapper:
 
 ```powershell
 & .\tests\run_test.ps1 test_dossier
@@ -213,7 +213,7 @@ func _run() -> void:
 
 Expected: failure because `dossier_snapshot()` does not exist. Do not rerun to reconfirm an observed failure.
 
-- [ ] **Step 3: Add the snapshot method near `contact_snapshot()`.** Iterate the authoritative in-memory contracts directly; they already contain current authored choices after validated loading. Do not call `_available_choices()`, save, emit signals, or duplicate full catalogs on each render.
+- [x] **Step 3: Add the snapshot method near `contact_snapshot()`.** Iterate the authoritative in-memory contracts directly; they already contain current authored choices after validated loading. Do not call `_available_choices()`, save, emit signals, or duplicate full catalogs on each render.
 
 ```gdscript
 func dossier_snapshot() -> Dictionary:
@@ -257,8 +257,8 @@ func dossier_snapshot() -> Dictionary:
 
 Unknown saved resolution IDs are already rejected by `_validate_contracts()`; do not conceal corruption with a fake outcome. No new historical classification metadata is needed.
 
-- [ ] **Step 4: Run the focused suite and observe the snapshot behavior.** Use the same command as Step 2 inside the safety wrapper. Expected: `RESULT: ALL PASSED`, exit 0. Defer full-suite execution until Task 2 is integrated. The rendered path still needs Task 2's smoke.
-- [ ] **Step 5: Commit only this task's files after its focused check.**
+- [x] **Step 4: Run the focused suite and observe the snapshot behavior.** Use the same command as Step 2 inside the safety wrapper. Expected: `RESULT: ALL PASSED`, exit 0. Defer full-suite execution until Task 2 is integrated. The rendered path still needs Task 2's smoke.
+- [x] **Step 5: Commit only this task's files after its focused check.**
 
 ```powershell
 git add -- autoload/game_state.gd tests/test_dossier.gd
@@ -274,7 +274,7 @@ git commit -m "feat: derive operator dossier from saved outcomes"
 - Produces `DossierPanel.setup(_gs: Node, data: Variant = null) -> void` and Main `_refresh_dossier() -> void` (only refresh an open, existing Dossier panel).
 - Main connects existing `heat_changed(int)` to `_refresh_dossier()`, calls it at the beginning of `_on_contracts_changed()` and `_on_contacts_changed()`, and supplies a snapshot when opening the module.
 
-- [ ] **Step 1: Add a saved-selection regression to `tests/test_main.gd`.** In `_run()`, immediately after constructing/naming GameState and before adding it to root, set `active_module = &"dossier"`, `module_open = true`, and `workspace_collapsed = false`. Immediately after Main is added, assert that it restores Dossier open and leaves state unchanged. Then explicitly select Home so the existing Home scenarios remain valid. This fails against the unconditional Home startup.
+- [x] **Step 1: Add a saved-selection regression to `tests/test_main.gd`.** In `_run()`, immediately after constructing/naming GameState and before adding it to root, set `active_module = &"dossier"`, `module_open = true`, and `workspace_collapsed = false`. Immediately after Main is added, assert that it restores Dossier open and leaves state unchanged. Then explicitly select Home so the existing Home scenarios remain valid. This fails against the unconditional Home startup.
 
 ```gdscript
 # Before root.add_child(gs):
@@ -346,7 +346,7 @@ Run once inside the safety wrapper:
 
 Expected before implementation: saved Dossier selection regression fails. Keep failures visible; do not suppress missing module behavior.
 
-- [ ] **Step 2: Create the script-backed scene and panel.** Use the same scene structure as `comms_panel.tscn`:
+- [x] **Step 2: Create the script-backed scene and panel.** Use the same scene structure as `comms_panel.tscn`:
 
 ```ini
 [gd_scene load_steps=2 format=3]
@@ -438,7 +438,7 @@ func setup(_gs: Node, data: Variant = null) -> void:
 
 Wrapping and the scroll container, not a hard-coded minimum height, must bound the panel. Keyboard users can Tab to the native vertical scrollbar and use its native key controls; no custom scrolling controller is needed. Verify reaching the final record with native keyboard scrolling, and leave Escape to Main. Do not claim `focus_mode` alone proves keyboard usability; exercise it.
 
-- [ ] **Step 3: Register and integrate Dossier.** Increment registry `load_steps` from 9 to 10 and add this subresource before Crew:
+- [x] **Step 3: Register and integrate Dossier.** Increment registry `load_steps` from 9 to 10 and add this subresource before Crew:
 
 ```ini
 [sub_resource type="Resource" id="def_dossier"]
@@ -487,9 +487,9 @@ _build_primary_module(initial_module)
 
 Keep existing `_apply_layout()` and resize hookup after restoration. There is no GameState validation migration to change: `_apply_profile()` already restores any string module ID except legacy Alerts, and Main controls scene availability. Updates triggered during `resolve_contract()` may briefly rebuild before `contracts_changed`; the final signal sees committed outcome and refreshes it. No event queue or debounce is necessary for the seven-record catalog.
 
-- [ ] **Step 4: Migrate affected existing expectations.** In `tests/test_module_registry.gd`, update the exact behavior-level rail order to Home, Comms, Contracts, Dossier, Crew, Market, Map and operational group indices to 4 and 6. Retain assertions for unlocked core/locked operational behavior and absence of Alerts. Remove the incidental glyph assertion at line 9 and incidental size-class/default assertions at lines 24–28; do not re-pin those copies. Do not add a new test just to echo Dossier's registry fields. In `test_main.gd`, use existing flow checks for rendered module state and restoration, not source-text assertions.
+- [x] **Step 4: Migrate affected existing expectations.** In `tests/test_module_registry.gd`, update the exact behavior-level rail order to Home, Comms, Contracts, Dossier, Crew, Market, Map and operational group indices to 4 and 6. Retain assertions for unlocked core/locked operational behavior and absence of Alerts. Remove the incidental glyph assertion at line 9 and incidental size-class/default assertions at lines 24–28; do not re-pin those copies. Do not add a new test just to echo Dossier's registry fields. In `test_main.gd`, use existing flow checks for rendered module state and restoration, not source-text assertions.
 
-- [ ] **Step 5: Run the focused checks, then the full suite once after integration.** Execute inside the safety wrapper, stopping on a failure before the full run. Expected after fixes: every executed suite exits 0; full runner prints `ALL SUITES PASSED`. Record actual suite count rather than assuming the previous count.
+- [x] **Step 5: Run the focused checks, then the full suite after integration.** Execute inside the safety wrapper. Expected after fixes: every executed suite exits 0; full runner prints `ALL SUITES PASSED`. Record actual suite count rather than assuming the previous count.
 
 ```powershell
 & .\tests\run_test.ps1 test_dossier
@@ -504,7 +504,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Persistence suite failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Full suite failed' }
 ```
 
-- [ ] **Step 6: Smoke the rendered project and inspect it.** Keep the safety wrapper active. Launch the existing boot/main flow with the actual configured binary:
+- [x] **Step 6: Smoke the rendered project and inspect it.** Keep the safety wrapper active. Launch the existing boot/main flow with the actual configured binary:
 
 ```powershell
 & 'C:\Users\merli\Documents\Godot Projects\Godot_v4.7.1-stable_win64_console.exe' --path . --resolution 1920x1080
@@ -520,7 +520,7 @@ Use a disposable profile under the protected save location. For populated smoke 
 6. Inspect at 1920×1080 and resize to 1280×720. Scroll all the way to the last populated record with mouse and keyboard. Every long title/action wraps, no horizontal scrollbar is required, and the primary panel stays within the workspace. Include a screenshot or concrete observed visual evidence; report any unavailable visual capability rather than calling headless checks visual proof.
 7. Exit the game before restoring original profile candidates and removing temporary scripts. Inspect captured debug output for script/runtime errors on the exercised paths.
 
-- [ ] **Step 7: Update existing documentation after smoke proof and commit.** In `next-features.md`, add a verified-state bullet and implemented recommendation for Operator Dossier; describe derived overlapping counts, existing contact/favor labels and Heat bands, resolved catalog-order history, and separate expired offers. Preserve the deferred inventory/crew/market/map decisions and avoid suggesting an unimplemented narrative identity engine. Add only exercised verification evidence. No extra documentation file is needed.
+- [x] **Step 7: Update existing documentation after smoke proof and commit.** In `next-features.md`, add a verified-state bullet and implemented recommendation for Operator Dossier; describe derived overlapping counts, existing contact/favor labels and Heat bands, resolved catalog-order history, and separate expired offers. Preserve the deferred inventory/crew/market/map decisions and avoid suggesting an unimplemented narrative identity engine. Add only exercised verification evidence. No extra documentation file is needed.
 
 ```powershell
 git add -- scenes/modules/dossier/dossier_panel.gd scenes/modules/dossier/dossier_panel.tscn resources/module_registry.tres scenes/main/main.gd tests/test_main.gd tests/test_module_registry.gd next-features.md
@@ -529,14 +529,20 @@ git commit -m "feat: add read-only operator dossier module"
 
 ## Plan self-review checklist
 
-- [ ] Snapshot schema matches every producer/consumer key above; outcomes come from unfiltered authored choices.
-- [ ] Counts exclude failures/expiry and overlap community correctly; lowering Heat never rewrites history.
-- [ ] Read-only state and detached return values are checked; no persisted dossier state or version change.
-- [ ] Startup restoration covers open, closed, collapsed, invalid, and scene-less selections without toggling.
-- [ ] Scroll/wrapping, keyboard access, live refresh, context closure, and save/relaunch are exercised on the actual surface.
-- [ ] Profile candidates are protected for all writing tests/smokes; temporary scaffolding is removed.
-- [ ] Existing incidental tests are removed, affected behavioral contracts migrated, full suite executed once after integration, and backlog updated only after proof.
+- [x] Snapshot schema matches every producer/consumer key above; outcomes come from unfiltered authored choices.
+- [x] Counts exclude failures/expiry and overlap community correctly; lowering Heat never rewrites history.
+- [x] Read-only state and detached return values are checked; no persisted dossier state or version change.
+- [x] Startup restoration covers open, closed, collapsed, invalid, and scene-less selections without toggling.
+- [x] Scroll/wrapping, keyboard access, live refresh, context closure, and save/relaunch are exercised on the actual surface.
+- [x] Profile candidates are protected for all writing tests/smokes; temporary scaffolding is removed.
+- [x] Existing incidental tests are removed, affected behavioral contracts migrated, final full suite passes after integration, and backlog is updated only after proof.
 
-## Execution handoff
+## Execution record
 
-Recommended: inline execution in this session, Task 1 then Task 2. Subagent-driven execution is available if requested, but the shared snapshot-to-render flow is dependent rather than two independent parallel slices. This plan does not claim that code, tests, or runtime verification have been performed.
+Completed inline. Task 1 is committed as `20d46e1`; Task 2 includes the panel, navigation, regression migration, and feature documentation.
+
+- The reload regression exposed a StringName-to-String status change across JSON loading. `dossier_snapshot()` normalizes operation status to StringName; a focused runtime probe proved the type boundary before the fix.
+- The rendered smoke exposed `FOCUS_NONE` in the shared rail. `scenes/ui/icon_rail.gd` now enables native focus for unlocked modules while leaving locked buttons out of the tab order. The full suite exposed an obsolete six-button count in `tests/test_icon_rail.gd`; that incidental assertion was removed, not re-pinned.
+- Final `tests/run_all.ps1`: all 18 runner entries passed, exit 0, no script errors. Existing audio/anchor/teardown harness diagnostics and deliberately exercised invalid-save diagnostics remain.
+- Actual D3D12/Forward+ boot-to-main smoke: fresh and mixed clean/aggressive/community records, failed jobs and expired offers, live Heat/favor changes, read-only refresh without duplicate rows, Go to Ground, contract-context closure, keyboard/mouse rail access and scrolling, Escape, collapse/expand, and bounds at 1920×1080 and 1280×720. Screenshots were inspected; a separate process relaunch restored the selected Dossier and derived history. Both final smoke runs reported zero failures.
+- Temporary runtime drivers were removed. The user's original primary profile was restored byte-for-byte; original temporary/backup absence was restored.

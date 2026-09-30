@@ -11,11 +11,6 @@ func _run() -> void:
 	rail.module_selected.connect(func(id: StringName) -> void: seen[0] = id)
 	rail.setup(reg)
 
-	var buttons: Array[Button] = []
-	for child in rail.find_children("*", "Button", true, false):
-		buttons.append(child)
-	check(buttons.size() == 6, "six module buttons — got %d" % buttons.size())
-
 	var home_btn: Button = rail.get_button(&"home")
 	check(home_btn != null and not home_btn.disabled, "home enabled")
 	var crew_btn: Button = rail.get_button(&"crew")

@@ -13,6 +13,7 @@ const MODULE_SCENES := {
 	&"home": preload("res://scenes/modules/home/home_panel.tscn"),
 	&"comms": preload("res://scenes/modules/comms/comms_panel.tscn"),
 	&"contracts": preload("res://scenes/modules/contracts/contracts_panel.tscn"),
+	&"dossier": preload("res://scenes/modules/dossier/dossier_panel.tscn"),
 }
 const ContractDetailScene := preload("res://scenes/modules/contracts/contract_detail.tscn")
 const EnvironmentScene := preload("res://scenes/main/environment.tscn")
@@ -108,6 +109,7 @@ func _build_shell() -> void:
 	_build_ticker()
 	gs.workspace_collapsed_changed.connect(_on_collapsed_changed)
 	gs.contracts_changed.connect(_on_contracts_changed)
+	gs.heat_changed.connect(func(_heat: int) -> void: _refresh_dossier())
 	gs.clock_changed.connect(func(_day: int, _minute: int) -> void:
 		if gs.active_module == &"contracts" and gs.module_open \
 				and _selected_contract_id != &"" and context_host.get_child_count() > 0:
@@ -125,7 +127,12 @@ func _build_shell() -> void:
 	icon_rail.module_selected.connect(select_module)
 	status_chip.collapse_requested.connect(gs.toggle_workspace)
 
-	select_module(&"home")
+	var initial_module: StringName = gs.active_module
+	if not MODULE_SCENES.has(initial_module):
+		initial_module = &"home"
+		gs.set_active_module(initial_module)
+		gs.set_module_open(true)
+	_build_primary_module(initial_module)
 	_apply_layout()
 	workspace.resized.connect(_apply_layout)
 
@@ -209,6 +216,8 @@ func _build_primary_module(id: StringName) -> void:
 		panel.residence_layout_changed.connect(_on_home_layout_changed)
 	elif id == &"comms":
 		panel.setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
+	elif id == &"dossier":
+		panel.setup(gs, gs.dossier_snapshot())
 	_apply_visibility()
 
 func close_topmost() -> void:
@@ -322,7 +331,14 @@ func _on_contract_resolved(_id: StringName, status: StringName) -> void:
 		_play_contract_sfx(CONTRACT_FAILED_SFX_PATH)
 
 
+func _refresh_dossier() -> void:
+	if gs.active_module == &"dossier" and gs.module_open \
+			and primary_host.get_child_count() > 0:
+		primary_host.get_child(0).setup(gs, gs.dossier_snapshot())
+		_apply_layout()
+
 func _on_contracts_changed() -> void:
+	_refresh_dossier()
 	if gs.active_module != &"contracts" or not gs.module_open:
 		return
 	var panel := primary_host.get_child(0)
@@ -332,6 +348,7 @@ func _on_contracts_changed() -> void:
 
 
 func _on_contacts_changed() -> void:
+	_refresh_dossier()
 	if gs.active_module == &"comms" and gs.module_open:
 		primary_host.get_child(0).setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
 func _close_contract_detail() -> void:
