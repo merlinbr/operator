@@ -261,6 +261,44 @@ func contact_snapshot() -> Array[Dictionary]:
 		snapshot.append(entry)
 	return snapshot
 
+func dossier_snapshot() -> Dictionary:
+	var signature := {"clean": 0, "aggressive": 0, "community": 0}
+	var operations: Array[Dictionary] = []
+	var expired_offers: Array[Dictionary] = []
+	var heat_band := "BELOW WARNING THRESHOLD"
+	for band: Dictionary in HEAT_WARNING_BANDS:
+		if heat >= int(band.threshold):
+			heat_band = String(band.name)
+	for contract: Dictionary in contracts:
+		if contract.status == &"expired":
+			expired_offers.append({
+				"id": contract.id, "code": contract.code, "title": contract.title,
+			})
+			continue
+		if contract.status != &"completed" and contract.status != &"failed":
+			continue
+		var outcome := "DEADLINE MISSED"
+		if contract.resolution_id != &"deadline_missed":
+			var choice := _choice(contract.complication.choices,
+				StringName(str(contract.resolution_id)))
+			outcome = String(choice.label)
+			if contract.status == &"completed":
+				if int(choice.heat_delta) == 0:
+					signature.clean += 1
+				elif int(choice.heat_delta) > 0:
+					signature.aggressive += 1
+				if contract.contact_id == &"vesper_clinic":
+					signature.community += 1
+		operations.append({
+			"id": contract.id, "code": contract.code, "title": contract.title,
+			"status": StringName(str(contract.status)), "outcome": outcome,
+		})
+	return {
+		"signature": signature, "heat": heat, "heat_band": heat_band,
+		"contacts": contact_snapshot(), "operations": operations,
+		"expired_offers": expired_offers,
+	}
+
 func _validate_contact_standing(raw: Variant) -> bool:
 	if typeof(raw) != TYPE_DICTIONARY or raw.size() != ContactCatalog.all().size():
 		return false
