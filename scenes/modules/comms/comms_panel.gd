@@ -52,6 +52,8 @@ func setup(_gs: Node, data: Variant = null) -> void:
 func _make_contact_row(contact: Dictionary) -> Label:
 	var label := Label.new()
 	label.text = "%s // %s" % [contact.display_name, contact.standing_label]
+	if contact.has("favor_label"):
+		label.text += " // " + str(contact.favor_label)
 	return label
 
 func _make_row(message: Dictionary, index: int) -> HBoxContainer:

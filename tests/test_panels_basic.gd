@@ -195,8 +195,8 @@ func _run() -> void:
 	var comms_text := ""
 	for label in comms.find_children("*", "Label", true, false):
 		comms_text += label.text + "\n"
-	check(comms_text.contains("MARA // KNOWN") and comms_text.contains("VESPER CLINIC // COLD"),
-		"COMMS renders the two visible Contact standings")
+	check(comms_text.contains("MARA // KNOWN // SQUARE") and comms_text.contains("VESPER CLINIC // COLD"),
+		"COMMS renders Mara balance alongside the two Contact standings")
 	var contracts := ContractsPanel.instantiate()
 	root.add_child(contracts)
 	gs.contracts[3].is_playable = true
@@ -209,9 +209,43 @@ func _run() -> void:
 		"Contracts distinguishes standing requirements from unpublished work")
 	contracts.queue_free()
 	comms.queue_free()
+	_test_favor_contacts()
 	for bus_name in native_buses:
 		var bus_index := AudioServer.get_bus_index(bus_name)
 		if bus_index >= 0 and original_volumes.has(bus_name):
 			AudioServer.set_bus_volume_db(bus_index, original_volumes[bus_name])
 			AudioServer.set_bus_mute(bus_index, original_mutes[bus_name])
 	gs.queue_free()
+
+func _test_favor_contacts() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var comms := CommsPanel.instantiate()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.proceed_contract(&"cold_chain_delivery")
+		and gs.resolve_contract(&"cold_chain_delivery", &"call_mara"), "Comms debt fixture calls Mara")
+	comms.setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
+	check(_contact_text(comms).contains("MARA // TRUSTED // YOU OWE MARA"),
+		"Comms displays player debt")
+	comms.free()
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.proceed_contract(&"cold_chain_delivery")
+		and gs.resolve_contract(&"cold_chain_delivery", &"pay_fee")
+		and gs.accept_contract(&"dead_drop_audit")
+		and gs.proceed_contract(&"dead_drop_audit")
+		and gs.resolve_contract(&"dead_drop_audit", &"trace_tag"), "Comms credit fixture traces tag")
+	comms = CommsPanel.instantiate()
+	comms.setup(gs, {"contacts": gs.contact_snapshot(), "messages": gs.messages})
+	check(_contact_text(comms).contains("MARA // TRUSTED // MARA OWES YOU")
+		and _contact_text(comms).contains("VESPER CLINIC // COLD"),
+		"Comms displays earned credit without changing clinic row")
+	comms.free()
+	gs.reset_profile()
+	gs.free()
+
+func _contact_text(comms: Control) -> String:
+	var text := ""
+	for label: Label in comms.find_children("*", "Label", true, false):
+		text += label.text + "\n"
+	return text

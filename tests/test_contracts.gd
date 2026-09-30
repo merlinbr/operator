@@ -219,6 +219,13 @@ func _run() -> void:
 	detail.setup(favor_gs, favor_gs.get_contract(&"clinic_asset_recovery"))
 	check(_button(detail, "SETTLE MARA'S FAVOR // HAND DELIVERY") != null,
 		"favor-owed R-311 renders the settlement action")
+	check(_button(detail, "SETTLE MARA'S FAVOR // HAND DELIVERY").has_theme_color_override("font_color")
+		and _text(detail).contains("FAVOR SETTLED"), "hand delivery previews accented settlement")
+	check(favor_gs.resolve_contract(&"clinic_asset_recovery", &"settle_mara_favor"),
+		"UI hand delivery settles debt")
+	detail.setup(favor_gs, favor_gs.get_contract(&"clinic_asset_recovery"))
+	check(_text(detail).contains("HAND DELIVERY COMPLETE // FAVOR SETTLED")
+		and _button(detail, "ACKNOWLEDGE") != null, "settlement result survives its gate closing")
 
 	var late_gs := GameStateScript.new()
 	var late: Dictionary = late_gs.get_contract(&"cold_chain_delivery")
@@ -243,6 +250,7 @@ func _run() -> void:
 	gs.queue_free()
 
 	_test_preparation_result_ui()
+	_test_favor_ui()
 
 func _text(control: Control) -> String:
 	var out := ""
@@ -276,6 +284,61 @@ func _test_preparation_result_ui() -> void:
 		and _button(detail, "SUBMIT PRE-CLEARED CARGO DOCUMENTS") == null
 		and _button(detail, "PROCEED TO DOCK 17") == null,
 		"deadline result retains sunk cost and removes stale purchased actions")
+	detail.free()
+	gs.reset_profile()
+	gs.free()
+
+func _test_favor_ui() -> void:
+	var gs := GameStateScript.new()
+	gs.reset_profile()
+	var detail := ContractDetail.instantiate()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.proceed_contract(&"cold_chain_delivery"), "favor UI reaches customs")
+	detail.setup(gs, gs.get_contract(&"cold_chain_delivery"))
+	check(_button(detail, "CALL MARA").has_theme_color_override("font_color")
+		and not _button(detail, "PAY CLEARANCE FEE // 250 CR").has_theme_color_override("font_color")
+		and _text(detail).contains("MARA FAVOR OWED"), "debt action has accent and words")
+	check(gs.resolve_contract(&"cold_chain_delivery", &"call_mara")
+		and gs.accept_contract(&"dead_drop_audit")
+		and gs.proceed_contract(&"dead_drop_audit"), "debt UI reaches audit")
+	detail.setup(gs, gs.get_contract(&"dead_drop_audit"))
+	check(_text(detail).contains("FAVOR SETTLED")
+		and not _text(detail).contains("MARA OWES YOU"), "tracing previews debt cancellation")
+	check(gs.resolve_contract(&"dead_drop_audit", &"trace_tag"), "audit settles debt")
+	detail.setup(gs, gs.get_contract(&"dead_drop_audit"))
+	check(_text(detail).contains("FAVOR SETTLED")
+		and not _text(detail).contains("MARA OWES YOU"), "settled result does not claim credit")
+	gs.reset_profile()
+	check(gs.accept_contract(&"cold_chain_delivery")
+		and gs.proceed_contract(&"cold_chain_delivery")
+		and gs.resolve_contract(&"cold_chain_delivery", &"pay_fee")
+		and gs.accept_contract(&"dead_drop_audit")
+		and gs.proceed_contract(&"dead_drop_audit"), "neutral UI reaches audit")
+	detail.setup(gs, gs.get_contract(&"dead_drop_audit"))
+	check(_text(detail).contains("MARA OWES YOU")
+		and _button(detail, "TRACE THE AUDIT TAG").has_theme_color_override("font_color"),
+		"tracing previews earned credit")
+	check(gs.resolve_contract(&"dead_drop_audit", &"trace_tag"), "audit earns credit")
+	detail.setup(gs, gs.get_contract(&"dead_drop_audit"))
+	check(_text(detail).contains("MARA OWES YOU"), "earned result describes credit")
+	check(gs.accept_contract(&"data_retrieval")
+		and gs.proceed_contract(&"data_retrieval")
+		and gs.resolve_contract(&"data_retrieval", &"spoof_credentials")
+		and gs.accept_contract(&"silent_partner")
+		and gs.proceed_contract(&"silent_partner"), "credit UI reaches Silent Partner")
+	gs.heat = 6
+	detail.setup(gs, gs.get_contract(&"silent_partner"))
+	var favor := _button(detail, "CALL IN MARA'S FAVOR")
+	check(favor != null and not favor.disabled
+		and favor.has_theme_color_override("font_color")
+		and _text(detail).contains("FAVOR SPENT")
+		and not _button(detail, "BUY INTERMEDIARY SILENCE // 1,300 CR").has_theme_color_override("font_color"),
+		"high-Heat favor route shows spending alongside ordinary route")
+	check(gs.resolve_contract(&"silent_partner", &"call_in_mara_favor"), "UI spends earned favor")
+	detail.setup(gs, gs.get_contract(&"silent_partner"))
+	check(_text(detail).contains("FILE RELEASED // FAVOR SPENT")
+		and _text(detail).contains("CREDITS     +5,600 CR")
+		and _button(detail, "ACKNOWLEDGE") != null, "spent favor result survives its gate closing")
 	detail.free()
 	gs.reset_profile()
 	gs.free()

@@ -5,6 +5,7 @@ const GameStateScript := preload("res://autoload/game_state.gd")
 const ContactCatalog := preload("res://data/contacts/contact_catalog.gd")
 const COLOR_ALERT := Color(1.0, 0.35294, 0.47059)
 const COLOR_DIM := Color(0.43529, 0.5451, 0.60392, 1)
+const COLOR_FAVOR := Color(0.22353, 0.81569, 1.0)
 
 signal accept_requested(contract_id: StringName)
 signal proceed_requested(contract_id: StringName)
@@ -78,7 +79,7 @@ func setup(gs: Node, data: Variant = null) -> void:
 		&"customs_hold":
 			_render_customs(gs, c)
 		&"resolved":
-			_render_resolved(c)
+			_render_resolved(gs, c)
 
 func _render_offer(gs: Node, c: Dictionary) -> void:
 	_title.text = "CONTRACT // " + c.code
@@ -137,25 +138,33 @@ func _render_customs(gs: Node, c: Dictionary) -> void:
 		if choice.get("requires_prep", false):
 			_add_preview(_prepared_outcome_text(gs, c, choice, int(c.prep_paid_credits)))
 		else:
-			_add_preview(choice.preview)
+			var preview: String = choice.preview
+			if choice_id == &"trace_tag" and gs.mara_favor_balance == -1:
+				preview = preview.replace("MARA OWES YOU", "FAVOR SETTLED")
+			_add_preview(preview)
 			if int(c.prep_paid_credits) > 0:
 				_add_preview("NET AFTER PREP %s CR" % _credit_delta_text(
 					int(choice.credit_delta) - int(c.prep_paid_credits)))
-		_add_action(choice.label, _emit_resolution.bind(choice_id))
+		var button := _add_action(choice.label, _emit_resolution.bind(choice_id))
+		if choice.has("mara_favor_delta"):
+			button.add_theme_color_override("font_color", COLOR_FAVOR)
 
 func _emit_resolution(choice_id: StringName) -> void:
 	resolution_requested.emit(_contract_id, choice_id)
 
-func _render_resolved(c: Dictionary) -> void:
+func _render_resolved(gs: Node, c: Dictionary) -> void:
 	if c.resolution_id == &"deadline_missed":
 		_render_deadline_result(c)
 		return
 	_body.add_theme_color_override("font_color", COLOR_DIM)
 	var choice := _choice(c, c.resolution_id)
 	_title.text = "CONTRACT COMPLETE" if c.status == &"completed" else "CONTRACT FAILED"
+	var result: String = choice.result
+	if c.resolution_id == &"trace_tag" and gs.mara_favor_balance == 0:
+		result = result.replace("MARA OWES YOU", "FAVOR SETTLED")
 	_body.text = "\n".join([
 		c.title,
-		"RESULT      " + choice.result,
+		"RESULT      " + result,
 		"CREDITS     " + _credit_delta_text(choice.credit_delta) + " CR",
 		"HEAT        %+d" % choice.heat_delta,
 	])
