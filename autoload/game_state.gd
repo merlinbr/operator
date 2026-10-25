@@ -200,9 +200,28 @@ func _read_profile_candidate(path: String) -> Variant:
 		if is_finite(raw_balance) and raw_balance >= -1.0 \
 				and raw_balance <= 1.0 and raw_balance == round(raw_balance):
 			parsed.mara_favor_balance = int(raw_balance)
+	_remap_retired_choices(parsed)
 	if not _validate_profile(parsed).is_empty():
 		return null
 	return parsed
+
+## Choices that an earlier release recorded but no longer authors. A save that
+## names one would otherwise fail validation and be discarded on load.
+const RETIRED_CHOICE_IDS := {&"buy_intermediary_silence": &"buy_silence"}
+
+func _remap_retired_choices(data: Dictionary) -> void:
+	var raw_contracts: Variant = data.get("contracts", [])
+	if typeof(raw_contracts) != TYPE_ARRAY:
+		return
+	for record: Variant in raw_contracts:
+		if typeof(record) != TYPE_DICTIONARY:
+			continue
+		var resolution: Variant = record.get("resolution_id", null)
+		if not _is_string_value(resolution):
+			continue
+		var retired := StringName(str(resolution))
+		if RETIRED_CHOICE_IDS.has(retired):
+			record.resolution_id = RETIRED_CHOICE_IDS[retired]
 
 func _reject_profile(reason: String) -> bool:
 	push_error("Unable to load operator profile: %s. Starting clean." % reason)
@@ -779,14 +798,16 @@ func get_contract(id: StringName) -> Dictionary:
 	if index < 0:
 		return {}
 	var snapshot: Dictionary = contracts[index].duplicate(true)
-	if snapshot.has("preparation"):
-		snapshot.preparation.choice = _choice(snapshot.complication.choices,
-			StringName(snapshot.preparation.choice_id))
 	if snapshot.has("complication") and snapshot.phase != &"resolved":
 		snapshot.complication.choices = _available_choices(contracts[index])
-		if snapshot.has("preparation"):
-			snapshot.preparation.choice = _choice(snapshot.complication.choices,
-				StringName(snapshot.preparation.choice_id))
+	if snapshot.has("preparation"):
+		var prepared := _choice(snapshot.complication.choices,
+			StringName(snapshot.preparation.choice_id))
+		if prepared.is_empty():
+			# An unpaid prepared response is filtered out of the listed choices.
+			prepared = _decorate(_choice(contracts[index].complication.choices,
+				StringName(snapshot.preparation.choice_id)))
+		snapshot.preparation.choice = prepared
 	if snapshot.phase == &"resolved" and snapshot.status == &"partial" \
 			and snapshot.has("complication"):
 		var recorded := _choice(snapshot.complication.choices,
@@ -808,12 +829,17 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 		if choice.has("requires_mara_balance") \
 				and mara_favor_balance != int(choice.requires_mara_balance):
 			continue
-		var entry: Dictionary = choice.duplicate(true)
-		if _is_degraded(choice):
-			entry.preview = String(choice.partial.preview)
-			entry.partial_now = true
+		var entry: Dictionary = _decorate(choice)
 		available.append(entry)
 	return available
+
+## Snapshot form of one authored response, with its live degraded preview and flag.
+func _decorate(choice: Dictionary) -> Dictionary:
+	var entry: Dictionary = choice.duplicate(true)
+	if _is_degraded(choice):
+		entry.preview = String(choice.partial.preview)
+		entry.partial_now = true
+	return entry
 
 ## Arriving above a route's threshold degrades it; the route itself stays offered.
 func _is_degraded(choice: Dictionary) -> bool:

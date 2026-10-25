@@ -190,6 +190,29 @@ func _run() -> void:
 	_test_v4_favor_migration()
 	_test_invalid_favor_profiles()
 	_test_favor_route_persistence()
+	_test_retired_choice_remap()
+
+func _test_retired_choice_remap() -> void:
+	var source := GameStateScript.new()
+	source.reset_profile()
+	var payload: Dictionary = source._profile_payload()
+	var silent_index := 3
+	payload.contracts[silent_index].is_playable = true
+	payload.contracts[silent_index].deadline_at_minute = 5000
+	payload.contracts[silent_index].status = &"completed"
+	payload.contracts[silent_index].phase = &"resolved"
+	payload.contracts[silent_index].resolution_id = &"buy_intermediary_silence"
+	payload.active_contract_id = &""
+	_write_deadline_profile(payload)
+	var restored := GameStateScript.new()
+	check(restored.load_profile(),
+		"a profile recorded against the retired intermediary route still loads")
+	check(restored.get_contract(&"silent_partner").resolution_id == &"buy_silence"
+		and restored.get_contract(&"silent_partner").status == &"completed",
+		"the retired route is remapped to the surviving silence response")
+	restored.reset_profile()
+	restored.free()
+	source.free()
 
 func _write_deadline_profile(payload: Dictionary) -> void:
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)

@@ -53,7 +53,7 @@ func setup(gs: Node, data: Variant = null) -> void:
 		+ "Partial: the job landed, but not cleanly.")
 	var explanation := _content.get_child(_content.get_child_count() - 1) as Label
 	explanation.add_theme_color_override("font_color", COLOR_DIM)
-	if int(signature.clean) + int(signature.aggressive) == 0:
+	if int(signature.clean) + int(signature.aggressive) + int(signature.partial) == 0:
 		_add_label("NO COMPLETED OPERATIONS YET")
 	_add_label("EXPOSURE", true)
 	_add_label("HEAT %d // %s" % [snapshot.heat, snapshot.heat_band])

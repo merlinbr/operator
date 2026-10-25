@@ -143,8 +143,10 @@ func _render_customs(gs: Node, c: Dictionary) -> void:
 				preview = preview.replace("MARA OWES YOU", "FAVOR SETTLED")
 			_add_preview(preview)
 			if int(c.prep_paid_credits) > 0:
+				var payout: int = int(choice.partial.credit_delta) \
+					if choice.get("partial_now", false) else int(choice.credit_delta)
 				_add_preview("NET AFTER PREP %s CR" % _credit_delta_text(
-					int(choice.credit_delta) - int(c.prep_paid_credits)))
+					payout - int(c.prep_paid_credits)))
 		var button := _add_action(choice.label, _emit_resolution.bind(choice_id))
 		if choice.has("mara_favor_delta"):
 			button.add_theme_color_override("font_color", COLOR_FAVOR)

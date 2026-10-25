@@ -13,6 +13,7 @@ func _run() -> void:
 	_test_unused_and_failed_preparation()
 	_test_data_tradeoffs()
 	_test_heat_degraded_preparation()
+	_test_partial_preview_surfaces()
 	var cleanup := GameStateScript.new()
 	cleanup.reset_profile()
 	cleanup.free()
@@ -177,6 +178,37 @@ func _test_data_tradeoffs() -> void:
 		and capped_token.heat == capped_prepared.heat
 		and capped_token.standing == capped_prepared.standing,
 		"at capped trust the basic token is cheaper with the same benefits")
+
+func _test_partial_preview_surfaces() -> void:
+	var unpaid := GameStateScript.new()
+	check(unpaid.accept_contract(DELIVERY), "unpaid fixture accepts delivery")
+	var detail := ContractDetail.instantiate()
+	root.add_child(detail)
+	detail.setup(unpaid, unpaid.get_contract(DELIVERY))
+	check(_button(detail, "ARRANGE INDEPENDENT CLEARANCE // 300 CR") != null,
+		"an unpaid prepared response still renders its purchase action")
+	unpaid.free()
+
+	var gs := GameStateScript.new()
+	check(gs.accept_contract(DELIVERY) and gs.proceed_contract(DELIVERY)
+		and gs.resolve_contract(DELIVERY, &"pay_fee"), "net fixture publishes D-207")
+	check(gs.accept_contract(DATA) and gs.prepare_contract(DATA), "net fixture buys cover")
+	gs.heat = 4
+	check(gs.proceed_contract(DATA), "net fixture proceeds")
+	detail.setup(gs, gs.get_contract(DATA))
+	var text := ""
+	for label in detail.find_children("*", "Label", true, false):
+		text += label.text + "\n"
+	check(text.contains("NET AFTER PREP +3,400 CR"),
+		"the pre-commit net uses the degraded payout")
+	detail.queue_free()
+	gs.free()
+
+func _button(control: Control, text: String) -> Button:
+	for button: Button in control.find_children("*", "Button", true, false):
+		if button.text == text:
+			return button
+	return null
 
 func _test_heat_degraded_preparation() -> void:
 	var warm := GameStateScript.new()
