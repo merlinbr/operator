@@ -68,6 +68,8 @@ func _row_text(contract: Dictionary, gs: Node) -> String:
 			return "COMPLETED // " + contract.title
 		&"failed":
 			return "FAILED // " + contract.title
+		&"partial":
+			return "PARTIAL // " + contract.title
 		&"expired":
 			return "EXPIRED // " + contract.title
 		_:

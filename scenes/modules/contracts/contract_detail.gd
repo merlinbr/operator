@@ -158,7 +158,13 @@ func _render_resolved(gs: Node, c: Dictionary) -> void:
 		return
 	_body.add_theme_color_override("font_color", COLOR_DIM)
 	var choice := _choice(c, c.resolution_id)
-	_title.text = "CONTRACT COMPLETE" if c.status == &"completed" else "CONTRACT FAILED"
+	match c.status:
+		&"completed":
+			_title.text = "CONTRACT COMPLETE"
+		&"partial":
+			_title.text = "CONTRACT PARTIAL"
+		_:
+			_title.text = "CONTRACT FAILED"
 	var result: String = choice.result
 	if c.resolution_id == &"trace_tag" and gs.mara_favor_balance == 0:
 		result = result.replace("MARA OWES YOU", "FAVOR SETTLED")

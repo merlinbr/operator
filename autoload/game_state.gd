@@ -781,6 +781,13 @@ func get_contract(id: StringName) -> Dictionary:
 			StringName(snapshot.preparation.choice_id))
 	if snapshot.has("complication") and snapshot.phase != &"resolved":
 		snapshot.complication.choices = _available_choices(contracts[index])
+	if snapshot.phase == &"resolved" and snapshot.status == &"partial" \
+			and snapshot.has("complication"):
+		var recorded := _choice(snapshot.complication.choices,
+			StringName(str(snapshot.resolution_id)))
+		if not recorded.is_empty() and recorded.has("partial"):
+			for key: StringName in [&"credit_delta", &"contact_standing_delta", &"result"]:
+				recorded[key] = recorded.partial[key]
 	return snapshot
 
 func _available_choices(contract: Dictionary) -> Array[Dictionary]:

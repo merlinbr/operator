@@ -251,6 +251,38 @@ func _run() -> void:
 
 	_test_preparation_result_ui()
 	_test_favor_ui()
+	_test_partial_screens()
+
+func _test_partial_screens() -> void:
+	var gs := GameStateScript.new()
+	check(gs.accept_contract(&"cold_chain_delivery"), "partial screen accepts C-1042")
+	check(gs.proceed_contract(&"cold_chain_delivery"), "partial screen proceeds C-1042")
+	check(gs.resolve_contract(&"cold_chain_delivery", &"pay_fee"), "partial screen resolves C-1042")
+	gs.heat = 4
+	check(gs.accept_contract(&"data_retrieval"), "partial screen accepts D-207")
+	check(gs.proceed_contract(&"data_retrieval"), "partial screen proceeds D-207")
+	check(gs.resolve_contract(&"data_retrieval", &"spoof_credentials"),
+		"partial screen degrades D-207")
+	var detail := ContractDetail.instantiate()
+	root.add_child(detail)
+	detail.setup(gs, gs.get_contract(&"data_retrieval"))
+	check(_text(detail).contains("CONTRACT PARTIAL"), "resolved screen names the partial outcome")
+	check(_text(detail).contains("SPOOF PARTIALLY ACCEPTED"),
+		"resolved screen shows the degraded result text")
+	check(_text(detail).contains("+3,900"), "resolved screen shows the degraded payout")
+	var panel := ContractsPanel.instantiate()
+	root.add_child(panel)
+	panel.setup(gs, gs.contracts)
+	var partial_row: Button = null
+	for child in panel.find_children("*", "Button", true, false):
+		if child.text.contains("DATA RETRIEVAL"):
+			partial_row = child
+	check(partial_row != null and partial_row.text.contains("PARTIAL // DATA RETRIEVAL")
+		and partial_row.disabled, "the contracts list shows a disabled partial row")
+	panel.queue_free()
+	detail.queue_free()
+	gs.reset_profile()
+	gs.free()
 
 func _text(control: Control) -> String:
 	var out := ""
@@ -332,7 +364,7 @@ func _test_favor_ui() -> void:
 	check(favor != null and not favor.disabled
 		and favor.has_theme_color_override("font_color")
 		and _text(detail).contains("FAVOR SPENT")
-		and not _button(detail, "BUY INTERMEDIARY SILENCE // 1,300 CR").has_theme_color_override("font_color"),
+		and not _button(detail, "BUY CUSTODIAN SILENCE // 900 CR").has_theme_color_override("font_color"),
 		"high-Heat favor route shows spending alongside ordinary route")
 	check(gs.resolve_contract(&"silent_partner", &"call_in_mara_favor"), "UI spends earned favor")
 	detail.setup(gs, gs.get_contract(&"silent_partner"))
