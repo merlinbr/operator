@@ -784,6 +784,9 @@ func get_contract(id: StringName) -> Dictionary:
 			StringName(snapshot.preparation.choice_id))
 	if snapshot.has("complication") and snapshot.phase != &"resolved":
 		snapshot.complication.choices = _available_choices(contracts[index])
+		if snapshot.has("preparation"):
+			snapshot.preparation.choice = _choice(snapshot.complication.choices,
+				StringName(snapshot.preparation.choice_id))
 	if snapshot.phase == &"resolved" and snapshot.status == &"partial" \
 			and snapshot.has("complication"):
 		var recorded := _choice(snapshot.complication.choices,
@@ -808,6 +811,7 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 		var entry: Dictionary = choice.duplicate(true)
 		if _is_degraded(choice):
 			entry.preview = String(choice.partial.preview)
+			entry.partial_now = true
 		available.append(entry)
 	return available
 

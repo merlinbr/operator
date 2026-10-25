@@ -1,6 +1,7 @@
 extends "res://tests/test_base.gd"
 
 const GameStateScript := preload("res://autoload/game_state.gd")
+const ContractDetail := preload("res://scenes/modules/contracts/contract_detail.tscn")
 const DELIVERY := &"cold_chain_delivery"
 const DATA := &"data_retrieval"
 const PAPERS := &"precleared_documents"
@@ -11,6 +12,7 @@ func _run() -> void:
 	_test_guards()
 	_test_unused_and_failed_preparation()
 	_test_data_tradeoffs()
+	_test_heat_degraded_preparation()
 	var cleanup := GameStateScript.new()
 	cleanup.reset_profile()
 	cleanup.free()
@@ -175,3 +177,51 @@ func _test_data_tradeoffs() -> void:
 		and capped_token.heat == capped_prepared.heat
 		and capped_token.standing == capped_prepared.standing,
 		"at capped trust the basic token is cheaper with the same benefits")
+
+func _test_heat_degraded_preparation() -> void:
+	var warm := GameStateScript.new()
+	check(warm.accept_contract(DELIVERY) and warm.prepare_contract(DELIVERY), "warm fixture prepares")
+	warm.heat = 6
+	check(warm.proceed_contract(DELIVERY), "warm fixture proceeds")
+	var warm_choice: Dictionary = warm.get_contract(DELIVERY).preparation.choice
+	check(not warm_choice.get("partial_now", false), "Heat 6 keeps prepared trust")
+	var warm_credits: int = warm.credits
+	var warm_standing: int = warm.standing_for(&"mara")
+	check(warm.resolve_contract(DELIVERY, PAPERS)
+		and warm.credits == warm_credits + 1400
+		and warm.standing_for(&"mara") == warm_standing + 1,
+		"Heat 6 prepared work still earns trust")
+	warm.free()
+
+	var hot := GameStateScript.new()
+	check(hot.accept_contract(DELIVERY) and hot.prepare_contract(DELIVERY), "hot fixture prepares")
+	hot.heat = 7
+	check(hot.proceed_contract(DELIVERY), "hot fixture proceeds")
+	var hot_choice: Dictionary = hot.get_contract(DELIVERY).preparation.choice
+	check(hot_choice.get("partial_now", false), "Heat 7 marks the prepared response degraded")
+	var detail := ContractDetail.instantiate()
+	root.add_child(detail)
+	detail.setup(hot, hot.get_contract(DELIVERY))
+	var preview := ""
+	for label in detail.find_children("*", "Label", true, false):
+		preview += label.text + "\n"
+	check(preview.contains("NO STANDING GAIN") and not preview.contains("STANDING +1"),
+		"a degraded prepared preview states the lost standing before commitment")
+	var credits: int = hot.credits
+	var standing: int = hot.standing_for(&"mara")
+	check(hot.resolve_contract(DELIVERY, PAPERS)
+		and hot.credits == credits + 1400
+		and hot.standing_for(&"mara") == standing
+		and hot.get_contract(DELIVERY).status == &"partial",
+		"Heat 7 prepared work keeps its payout and earns no trust")
+	check(hot.save_profile(), "degraded prepared work saves")
+	var restored := GameStateScript.new()
+	check(restored.load_profile()
+		and restored.get_contract(DELIVERY).status == &"partial",
+		"a prepared partial outcome reloads")
+	restored.free()
+	var cleanup := GameStateScript.new()
+	cleanup.reset_profile()
+	cleanup.free()
+	detail.queue_free()
+	hot.free()

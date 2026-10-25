@@ -200,10 +200,14 @@ func _append_preparation_accounting(c: Dictionary, payout: int) -> void:
 func _prepared_outcome_text(gs: Node, c: Dictionary, choice: Dictionary, paid: int) -> String:
 	var contact := ContactCatalog.by_id(c.contact_id)
 	var standing: int = gs.standing_for(c.contact_id)
-	var gain := mini(int(choice.contact_standing_delta), ContactCatalog.TRUSTED - standing)
-	var standing_text := "%s STANDING +%d" % [contact.display_name, gain]
-	if standing >= ContactCatalog.TRUSTED:
-		standing_text += " // ALREADY TRUSTED"
+	var standing_text := ""
+	if choice.get("partial_now", false):
+		standing_text = "%s STANDING +0 // NO STANDING GAIN" % contact.display_name
+	else:
+		var gain := mini(int(choice.contact_standing_delta), ContactCatalog.TRUSTED - standing)
+		standing_text = "%s STANDING +%d" % [contact.display_name, gain]
+		if standing >= ContactCatalog.TRUSTED:
+			standing_text += " // ALREADY TRUSTED"
 	return "\n".join([
 		"PAYOUT %s CR // HEAT %+d" % [_credit_delta_text(int(choice.credit_delta)), int(choice.heat_delta)],
 		"NET AFTER PREP %s CR" % _credit_delta_text(int(choice.credit_delta) - paid),
