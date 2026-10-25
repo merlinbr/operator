@@ -38,9 +38,9 @@ func _run() -> void:
 	check(data_retrieval.code == "D-207" and not data_retrieval.is_playable
 		and data_retrieval.contact_id == &"mara" and data_retrieval.minimum_contact_standing == 1,
 		"D-207 is a locked Known-tier Mara contract")
-	check(_choice(data_retrieval, &"spoof_credentials").max_heat == 3
+	check(_choice(data_retrieval, &"spoof_credentials").partial_above_heat == 3
 		and _choice(data_retrieval, &"routed_vendor_id").min_heat == 4,
-		"D-207 preserves its authored Heat-gated choices")
+		"D-207 prices high Heat on spoofing instead of hiding it")
 	check(_successors(data_retrieval) == [&"silent_partner", &"clinic_asset_recovery"],
 		"every D-207 outcome publishes Mara and Clinic successors")
 
@@ -80,6 +80,19 @@ func _run() -> void:
 	contracts[0].status = &"completed"
 	check(ContractCatalog.all()[0].status == &"available",
 		"each catalog request returns fresh runtime records")
+
+	for contract: Dictionary in contracts:
+		for choice: Dictionary in contract.complication.choices:
+			check(not choice.has("max_heat"), "no response hides itself at high Heat")
+			check(choice.has("partial") == choice.has("partial_above_heat"),
+				"every degraded form has a threshold and every threshold a degraded form")
+			if choice.has("partial"):
+				check(int(choice.partial.credit_delta) <= int(choice.credit_delta),
+					"a degraded payout never exceeds the clean payout")
+	check(not contracts.any(func(contract: Dictionary) -> bool:
+		return contract.complication.choices.any(func(choice: Dictionary) -> bool:
+			return choice.id == &"buy_intermediary_silence")),
+		"the duplicated intermediary route is not authored")
 
 func _choice(contract: Dictionary, choice_id: StringName) -> Dictionary:
 	for choice: Dictionary in contract.complication.choices:

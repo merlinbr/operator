@@ -182,8 +182,8 @@ func _run() -> void:
 	detail.setup(portfolio_gs, high_heat_data)
 	check(_button(detail, "USE ROUTED VENDOR ID // 650 CR") != null,
 		"high-Heat D-207 renders routed vendor ID")
-	check(_button(detail, "SPOOF SERVICE CREDENTIALS") == null,
-		"high-Heat D-207 hides spoof credentials")
+	check(_button(detail, "SPOOF SERVICE CREDENTIALS") != null,
+		"high-Heat D-207 keeps spoof credentials available")
 	check(portfolio_gs.resolve_contract(&"data_retrieval", &"routed_vendor_id"),
 		"portfolio resolves high-Heat D-207")
 	check(portfolio_gs.accept_contract(&"silent_partner")
@@ -192,16 +192,16 @@ func _run() -> void:
 	portfolio_gs.heat = 6
 	var high_heat_silent := portfolio_gs.get_contract(&"silent_partner")
 	detail.setup(portfolio_gs, high_heat_silent)
-	var intermediary: Dictionary = {}
+	var degraded: Dictionary = {}
 	for choice: Dictionary in high_heat_silent.complication.choices:
-		if choice.id == &"buy_intermediary_silence":
-			intermediary = choice
-	check(not intermediary.is_empty()
-		and _button(detail, intermediary.label) != null
-		and _text(detail).contains(intermediary.preview),
-		"high-Heat Silent Partner renders intermediary choice and payout preview")
-	check(_button(detail, "BUY CUSTODIAN SILENCE // 900 CR") == null,
-		"high-Heat Silent Partner hides the ordinary silence purchase")
+		if choice.id == &"buy_silence":
+			degraded = choice
+	check(not degraded.is_empty()
+		and _button(detail, degraded.label) != null
+		and _text(detail).contains(degraded.preview),
+		"high-Heat Silent Partner renders the degraded silence preview")
+	check(_button(detail, "BUY INTERMEDIARY SILENCE // 1,300 CR") == null,
+		"high-Heat Silent Partner no longer offers the duplicate intermediary route")
 
 	var favor_gs := GameStateScript.new()
 	check(favor_gs.accept_contract(&"cold_chain_delivery"), "favor setup accepts C-1042")

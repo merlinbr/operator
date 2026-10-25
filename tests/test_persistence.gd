@@ -294,11 +294,11 @@ func _test_favor_route_persistence() -> void:
 		"reload keeps M-613 favor choice available")
 	var credits_before: int = restored.credits
 	var active_before: StringName = restored.active_contract_id
-	check(not restored.resolve_contract(&"silent_partner", &"buy_intermediary_silence")
+	check(not restored.resolve_contract(&"silent_partner", &"nonexistent_choice")
 		and restored.credits == credits_before
 		and restored.mara_favor_balance == 1
 		and restored.active_contract_id == active_before,
-		"rejected M-613 choice leaves saved balance unchanged")
+		"unknown M-613 choice is rejected")
 	var rejected_file := FileAccess.open(SAVE_PATH, FileAccess.READ)
 	var rejected_payload: Dictionary = JSON.parse_string(rejected_file.get_as_text())
 	rejected_file.close()

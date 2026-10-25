@@ -434,7 +434,7 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 			return "profile contract IDs are invalid"
 		if typeof(record.get("is_playable", null)) != TYPE_BOOL:
 			return "profile contract unlocks are invalid"
-		var valid_statuses := [&"available", &"active", &"completed", &"failed"]
+		var valid_statuses := [&"available", &"active", &"completed", &"failed", &"partial"]
 		if profile_version >= 3:
 			valid_statuses.append(&"expired")
 		if not _is_string_value(record.get("status", null)) \
@@ -471,7 +471,8 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 				return "profile preparation spending is invalid"
 			if paid > 0 and (not authored[index].has("preparation")
 					or not record.is_playable or int(record.deadline_at_minute) < 0
-					or (status != &"active" and status != &"completed" and status != &"failed")):
+					or (status != &"active" and status != &"completed"
+						and status != &"failed" and status != &"partial")):
 				return "profile preparation state is invalid"
 		if status == &"active":
 			active_count += 1
@@ -484,7 +485,8 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 		elif status == &"available":
 			if phase != &"offer" or record.resolution_id != &"":
 				return "profile contract state is invalid"
-		elif status == &"completed" or status == &"failed" or status == &"expired":
+		elif status == &"completed" or status == &"failed" or status == &"expired" \
+				or status == &"partial":
 			if phase != &"resolved" or record.resolution_id == &"":
 				return "profile terminal contract state is invalid"
 			if status != &"expired" and record.resolution_id == &"deadline_missed":
@@ -493,7 +495,10 @@ func _validate_contracts(raw_contracts: Variant, active_id: StringName, profile_
 			elif status != &"expired":
 				var choice := _choice(authored[index].complication.choices,
 					StringName(str(record.resolution_id)))
-				if choice.is_empty() or choice.terminal_status != status:
+				if choice.is_empty():
+					return "profile terminal contract resolution is invalid"
+				var degraded_outcome: bool = status == &"partial" and choice.has("partial")
+				if choice.terminal_status != status and not degraded_outcome:
 					return "profile terminal contract resolution is invalid"
 				if choice.get("requires_prep", false):
 					if profile_version < 4:
@@ -785,15 +790,42 @@ func _available_choices(contract: Dictionary) -> Array[Dictionary]:
 	for choice: Dictionary in contract.complication.choices:
 		if choice.get("requires_prep", false) and int(contract.prep_paid_credits) == 0:
 			continue
-		if choice.has("max_heat") and heat > int(choice.max_heat):
-			continue
 		if choice.has("min_heat") and heat < int(choice.min_heat):
 			continue
 		if choice.has("requires_mara_balance") \
 				and mara_favor_balance != int(choice.requires_mara_balance):
 			continue
-		available.append(choice)
+		var entry: Dictionary = choice.duplicate(true)
+		if _is_degraded(choice):
+			entry.preview = String(choice.partial.preview)
+		available.append(entry)
 	return available
+
+## Arriving above a route's threshold degrades it; the route itself stays offered.
+func _is_degraded(choice: Dictionary) -> bool:
+	return choice.has("partial") and heat > int(choice.partial_above_heat)
+
+## The Credits, standing, text, and outcome class actually in force for this choice.
+func _effective_outcome(choice: Dictionary) -> Dictionary:
+	var outcome := {
+		"credit_delta": int(choice.credit_delta),
+		"contact_standing_delta": int(choice.contact_standing_delta),
+		"result": String(choice.result),
+		"ticker": String(choice.ticker),
+		"message_preview": String(choice.message_preview),
+		"message_sender": String(choice.message_sender),
+		"terminal_status": StringName(str(choice.terminal_status)),
+	}
+	if not _is_degraded(choice):
+		return outcome
+	var degraded: Dictionary = choice.partial
+	outcome.credit_delta = int(degraded.credit_delta)
+	outcome.contact_standing_delta = int(degraded.contact_standing_delta)
+	outcome.result = String(degraded.result)
+	outcome.ticker = String(degraded.ticker)
+	outcome.message_preview = String(degraded.message_preview)
+	outcome.terminal_status = &"partial"
+	return outcome
 
 func _choice(choices: Array, choice_id: StringName) -> Dictionary:
 	for choice: Dictionary in choices:
@@ -920,8 +952,9 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 	var choice := _choice(_available_choices(contract), choice_id)
 	if choice.is_empty():
 		return false
-	if choice.credit_delta != 0:
-		_add_credits(choice.credit_delta)
+	var outcome := _effective_outcome(choice)
+	if outcome.credit_delta != 0:
+		_add_credits(outcome.credit_delta)
 	var previous_heat := heat
 	if choice.heat_delta != 0:
 		heat += choice.heat_delta
@@ -932,19 +965,17 @@ func resolve_contract(id: StringName, choice_id: StringName) -> bool:
 			mara_favor_balance + int(choice.mara_favor_delta), -1, 1)
 		if mara_favor_balance != previous_favor:
 			contacts_changed.emit()
-	if choice.contact_standing_delta > 0:
-		_raise_contact_standing(contract.contact_id, int(choice.contact_standing_delta))
+	if outcome.contact_standing_delta > 0:
+		_raise_contact_standing(contract.contact_id, int(outcome.contact_standing_delta))
 	_unlock_contracts(choice.unlocks_contract_ids, current_minute())
-	contract.status = choice.terminal_status
+	contract.status = outcome.terminal_status
 	contract.phase = &"resolved"
 	contract.resolution_id = choice_id
 	active_contract_id = &""
 	contracts_changed.emit()
-	var feedback_choice: Dictionary = choice
 	if choice.id == &"trace_tag" and previous_favor == -1:
-		feedback_choice = choice.duplicate(true)
-		feedback_choice.message_preview = "We're square. You found the leak without waking it."
-	_push_resolution_feedback(feedback_choice)
+		outcome.message_preview = "We're square. You found the leak without waking it."
+	_push_resolution_feedback(outcome)
 	contract_resolved.emit(id, contract.status)
 	save_profile()
 	return true

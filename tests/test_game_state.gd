@@ -107,42 +107,25 @@ func _test_silent_partner_heat_choices() -> void:
 		check(gs.accept_contract(&"silent_partner"), "M-613 accepts at Heat %d" % heat_value)
 		check(gs.proceed_contract(&"silent_partner"), "M-613 proceeds at Heat %d" % heat_value)
 		var ids := _choice_ids(gs.get_contract(&"silent_partner"))
-		check(ids.has(&"mirror_archive") and ids.has(&"abort"),
-			"M-613 keeps mirror and abort at Heat %d" % heat_value)
-		check(ids.has(&"buy_silence") == (heat_value <= 5)
-			and ids.has(&"buy_intermediary_silence") == (heat_value >= 6),
-			"M-613 exposes only the authored silence route for Heat %d" % heat_value)
-		var hidden_choice: StringName = &"buy_intermediary_silence" if heat_value == 5 else &"buy_silence"
+		check(ids.has(&"mirror_archive") and ids.has(&"abort") and ids.has(&"buy_silence"),
+			"M-613 keeps mirror, abort, and silence at Heat %d" % heat_value)
+		check(not ids.has(&"buy_intermediary_silence"),
+			"M-613 no longer duplicates the intermediary route at Heat %d" % heat_value)
 		var credits_before: int = gs.credits
 		var phase_before: StringName = gs.get_contract(&"silent_partner").phase
-		check(not gs.resolve_contract(&"silent_partner", hidden_choice),
-			"hidden M-613 choice is rejected at Heat %d" % heat_value)
+		check(not gs.resolve_contract(&"silent_partner", &"call_in_mara_favor"),
+			"gated M-613 choice is rejected at Heat %d" % heat_value)
 		check(gs.credits == credits_before and gs.active_contract_id == &"silent_partner"
 			and gs.get_contract(&"silent_partner").phase == phase_before,
-			"hidden M-613 choice rejection does not mutate state")
-		if heat_value == 5:
-			check(gs.resolve_contract(&"silent_partner", &"buy_silence")
-				and gs.credits == credits_before + 4700 and gs.heat == 5,
-				"low-Heat custodian silence retains its 4,700 CR outcome")
-		else:
-			var outcome: Variant = _at_silent_partner()
-			outcome.heat = 6
-			check(outcome.accept_contract(&"silent_partner")
-				and outcome.proceed_contract(&"silent_partner"),
-				"high-Heat outcome setup reaches M-613")
-			var payout_before: int = outcome.credits
-			var standing_before: int = outcome.standing_for(&"mara")
-			var favor_before: int = outcome.mara_favor_balance
-			check(outcome.resolve_contract(&"silent_partner", &"buy_intermediary_silence"),
-				"high-Heat intermediary silence resolves")
-			check(outcome.credits == payout_before + 4300 and outcome.heat == 6,
-				"intermediary silence pays 4,300 CR without more Heat")
-			check(outcome.standing_for(&"mara") == standing_before
-				and outcome.mara_favor_balance == favor_before
-				and outcome.get_contract(&"silent_partner").status == &"completed",
-				"intermediary silence preserves standing and favor and completes M-613")
-			outcome.reset_profile()
-			outcome.free()
+			"gated M-613 choice rejection does not mutate state at Heat %d" % heat_value)
+		check(gs.resolve_contract(&"silent_partner", &"buy_silence"),
+			"custodian silence resolves at Heat %d" % heat_value)
+		var expected_payout := 4700 if heat_value == 5 else 4300
+		var expected_status: StringName = &"completed" if heat_value == 5 else &"partial"
+		check(gs.credits == credits_before + expected_payout
+			and gs.heat == heat_value
+			and gs.get_contract(&"silent_partner").status == expected_status,
+			"custodian silence outcome follows arrival Heat at %d" % heat_value)
 		gs.reset_profile()
 		gs.free()
 func _test_mara_favor_aftermath() -> void:
@@ -160,7 +143,7 @@ func _test_mara_favor_aftermath() -> void:
 		and credit.proceed_contract(&"silent_partner"), "favor path reaches M-613")
 	credit.heat = 6
 	var ids := _choice_ids(credit.get_contract(&"silent_partner"))
-	check(ids.has(&"call_in_mara_favor") and ids.has(&"buy_intermediary_silence")
+	check(ids.has(&"call_in_mara_favor") and ids.has(&"buy_silence")
 		and ids.has(&"mirror_archive"), "favor route coexists with high-Heat routes")
 	var before := credit.credits
 	check(credit.resolve_contract(&"silent_partner", &"call_in_mara_favor")
@@ -570,20 +553,25 @@ func _run() -> void:
 	var high_heat_gs := GameStateScript.new()
 	_at_data_customs(high_heat_gs, &"bypass")
 	var high_heat_ids := _choice_ids(high_heat_gs.get_contract(&"data_retrieval"))
-	check(not high_heat_ids.has(&"spoof_credentials") and high_heat_ids.has(&"routed_vendor_id"),
-		"Heat four replaces spoof credentials with routed vendor ID")
+	check(high_heat_ids.has(&"spoof_credentials") and high_heat_ids.has(&"routed_vendor_id"),
+		"Heat four keeps spoof credentials beside the routed vendor ID")
 	var high_heat_credits := high_heat_gs.credits
-	check(not high_heat_gs.resolve_contract(&"data_retrieval", &"spoof_credentials"),
-		"hidden spoof credential choice is rejected")
-	check(high_heat_gs.credits == high_heat_credits
-		and high_heat_gs.active_contract_id == &"data_retrieval",
-		"hidden choice rejection does not mutate state")
-	check(high_heat_gs.resolve_contract(&"data_retrieval", &"routed_vendor_id"),
-		"routed vendor ID resolves at Heat four")
-	check(high_heat_gs.credits == high_heat_gs.START_CREDITS + 1400 + 3550
-		and high_heat_gs.heat == 4,
-		"routed vendor ID pays its authored reduced reward without new Heat")
+	check(high_heat_gs.resolve_contract(&"data_retrieval", &"spoof_credentials")
+		and high_heat_gs.credits == high_heat_credits + 3900
+		and high_heat_gs.heat == 4
+		and high_heat_gs.get_contract(&"data_retrieval").status == &"partial",
+		"Heat four degrades spoof credentials instead of hiding them")
 	high_heat_gs.free()
+
+	var routed_gs := GameStateScript.new()
+	_at_data_customs(routed_gs, &"bypass")
+	check(routed_gs.resolve_contract(&"data_retrieval", &"routed_vendor_id"),
+		"routed vendor ID resolves at Heat four")
+	check(routed_gs.credits == routed_gs.START_CREDITS + 1400 + 3550
+		and routed_gs.heat == 4
+		and routed_gs.get_contract(&"data_retrieval").status == &"completed",
+		"routed vendor ID pays its authored reduced reward without new Heat")
+	routed_gs.free()
 
 	var favor_portfolio_gs := GameStateScript.new()
 	_at_data_customs(favor_portfolio_gs, &"call_mara")
