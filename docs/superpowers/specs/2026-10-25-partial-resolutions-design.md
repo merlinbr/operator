@@ -64,6 +64,7 @@ Deleting `buy_intermediary_silence` changes one existing outcome label: at Heat 
 - Preparation is the one exception: its preview line is computed by `_prepared_outcome_text()`, which derives the standing gain at render time. `get_contract()` marks each returned choice with a transient `partial_now: bool` and the panel reads that flag instead of recomputing `heat > threshold` itself, so the rule stays in `GameState`. When the flag is set, the preparation preview states the contact's standing is unchanged rather than showing `STANDING +1`, and the outcome line reads as partial. `partial_now` is runtime-only and never saved.
 - A degraded preview must be truthful at click time. Heat cannot change while a contract is active: `go_to_ground()` and `rest_until_next_day()` both refuse when `active_contract_id != &""`, and no other path mutates Heat. A preview computed at render therefore remains accurate when the player commits.
 - The resolved screen shows the degraded Credits and standing from the partial block, and titles the outcome `CONTRACT PARTIAL`. `completed` and `failed` keep their current titles.
+- The contracts list row reads `PARTIAL // <title>` and stays non-selectable, instead of falling through to the available-row reward format.
 - The dossier counts partial operations separately as `signature.partial` and lists them in the operations record with their response label. Lowering Heat afterwards does not rewrite the count.
 
 ## State and data flow
