@@ -64,7 +64,6 @@ Deadline enforcement, optional preparation, active Heat, Mara favor/aftermath, t
 
 ## Known gaps and defects
 
-- **The test harness cannot fail on an engine error.** `tests/test_base.gd` counts only `check()` results, so a Godot `SCRIPT ERROR` prints to the log and the suite still reports `RESULT: ALL PASSED`. This is not hypothetical: during the partial-resolutions pass, preparation silently stopped rendering its purchase button, `test_main` printed the error nine times, and every suite stayed green. Candidate fix: record any engine error during the run and fail teardown, or make `run_all.ps1` fail on `SCRIPT ERROR` in captured output. Open — it will keep hiding regressions in every future pass.
 - **Save corruption by catalog deletion is a standing hazard.** `_reject_profile` responds to any invalid profile by calling `reset_profile`, which deletes all three save files. Retiring an authored choice id therefore wipes the save of anyone who recorded it, unless a load-time remap is added in the same commit. `buy_intermediary_silence` → `buy_silence` is the one existing example. Any future catalog surgery must check this path.
 - **The `partial` resolution cue is untested.** `scenes/main/main.gd` plays the completion sound for `partial` as it does for `completed`, but `tests/test_main.gd` only asserts the `completed` mapping.
 - **Preparation has a single price for every Heat level.** Its degraded form costs standing rather than credits, which is deliberate, but the 300/500 CR upfront cost does not scale with exposure.

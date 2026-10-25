@@ -46,7 +46,7 @@ Headless GDScript tests (no framework — a minimal `SceneTree` harness). Run on
 .\tests\run_test.ps1 test_game_state
 ```
 
-Test files include focused coverage for boot, contracts, contract catalog, environment, game state, persistence, panels, main scene, theme, and UI components. Every suite prints `RESULT: ALL PASSED` on success; `.\tests\run_all.ps1` runs the complete set.
+Test files include focused coverage for boot, contracts, contract catalog, environment, game state, persistence, panels, main scene, theme, and UI components. Every suite prints `RESULT: ALL PASSED` on success; `.\tests\run_all.ps1` runs the complete set. A suite also fails when Godot prints `SCRIPT ERROR` during the run or never prints a `RESULT` line, so a runtime error cannot pass as a green suite.
 
 ## Project structure
 
