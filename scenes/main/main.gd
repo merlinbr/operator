@@ -325,7 +325,7 @@ func _on_contract_proceeded(_id: StringName) -> void:
 	_play_contract_sfx(CONTRACT_PROCEEDED_SFX_PATH)
 
 func _on_contract_resolved(_id: StringName, status: StringName) -> void:
-	if status == &"completed":
+	if status == &"completed" or status == &"partial":
 		_play_contract_sfx(CONTRACT_COMPLETED_SFX_PATH)
 	elif status == &"failed":
 		_play_contract_sfx(CONTRACT_FAILED_SFX_PATH)
