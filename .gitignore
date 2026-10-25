@@ -4,3 +4,6 @@
 
 # Brainstorm visual companion sessions
 .superpowers/
+
+# Agent tool state
+.pi/
