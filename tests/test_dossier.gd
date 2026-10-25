@@ -10,7 +10,7 @@ func _resolve(gs: Node, id: StringName, choice: StringName) -> void:
 func _run() -> void:
 	var gs := GameStateScript.new()
 	var fresh: Dictionary = gs.dossier_snapshot()
-	check(fresh.signature == {"clean": 0, "aggressive": 0, "community": 0}
+	check(fresh.signature == {"clean": 0, "aggressive": 0, "community": 0, "partial": 0}
 		and fresh.operations.is_empty() and fresh.expired_offers.is_empty(),
 		"fresh profile has no historical work")
 	_resolve(gs, &"cold_chain_delivery", &"pay_fee")
@@ -20,7 +20,7 @@ func _run() -> void:
 	_resolve(gs, &"clinic_asset_recovery", &"maintenance_bypass")
 	gs.heat = 9
 	var populated: Dictionary = gs.dossier_snapshot()
-	check(populated.signature == {"clean": 4, "aggressive": 1, "community": 1},
+	check(populated.signature == {"clean": 4, "aggressive": 1, "community": 1, "partial": 0},
 		"clinic completion overlaps aggressive work")
 	check(populated.operations.map(func(row: Dictionary): return row.id)
 		== [&"cold_chain_delivery", &"data_retrieval", &"dead_drop_audit",
@@ -29,6 +29,19 @@ func _run() -> void:
 	check(populated.operations[1].outcome == "SPOOF SERVICE CREDENTIALS"
 		and populated.operations[3].outcome == "CALL IN MARA'S FAVOR",
 		"current Heat and spent favor do not hide historical actions")
+
+	var degraded := GameStateScript.new()
+	_resolve(degraded, &"cold_chain_delivery", &"pay_fee")
+	degraded.heat = 4
+	_resolve(degraded, &"data_retrieval", &"spoof_credentials")
+	var degraded_snapshot: Dictionary = degraded.dossier_snapshot()
+	check(degraded_snapshot.signature == {"clean": 1, "aggressive": 0,
+		"community": 0, "partial": 1},
+		"a degraded route counts as partial without claiming clean work")
+	check(degraded_snapshot.operations.any(func(row: Dictionary) -> bool:
+		return row.id == &"data_retrieval" and row.status == &"partial" and row.outcome == "SPOOF SERVICE CREDENTIALS"),
+		"partial operations stay in the record with their response label")
+	degraded.free()
 	check(gs.go_to_ground(), "history scenario can lower Heat")
 	check(gs.dossier_snapshot().signature == populated.signature,
 		"lowering current Heat does not rewrite work signature")
@@ -71,7 +84,7 @@ func _run() -> void:
 	_resolve(aborted, &"cold_chain_delivery", &"abort")
 	check(aborted.dossier_snapshot().operations[0].status == &"failed"
 		and aborted.dossier_snapshot().signature
-			== {"clean": 0, "aggressive": 0, "community": 0},
+			== {"clean": 0, "aggressive": 0, "community": 0, "partial": 0},
 		"abort is recorded but never counted as clean work")
 	check(aborted.accept_contract(&"data_retrieval"), "accept deadline scenario")
 	var active_cutoff: int = aborted.get_contract(&"data_retrieval").deadline_at_minute
@@ -84,7 +97,7 @@ func _run() -> void:
 		func(row: Dictionary): return row.id == &"data_retrieval")
 	check(failed_job.size() == 1 and failed_job[0].status == &"failed"
 		and failed_job[0].outcome == "DEADLINE MISSED"
-		and missed.signature == {"clean": 0, "aggressive": 0, "community": 0},
+		and missed.signature == {"clean": 0, "aggressive": 0, "community": 0, "partial": 0},
 		"active deadline failure is recorded without route credit")
 	aborted.free()
 
@@ -95,6 +108,6 @@ func _run() -> void:
 	check(offers.operations.is_empty()
 		and offers.expired_offers.any(func(row: Dictionary):
 			return row.id == &"cold_chain_delivery")
-		and offers.signature == {"clean": 0, "aggressive": 0, "community": 0},
+		and offers.signature == {"clean": 0, "aggressive": 0, "community": 0, "partial": 0},
 		"unaccepted expiry is separate from undertaken work")
 	expired.free()

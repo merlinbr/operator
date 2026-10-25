@@ -46,10 +46,11 @@ func setup(gs: Node, data: Variant = null) -> void:
 	title.add_theme_font_size_override("font_size", 17)
 	_add_label("WORK SIGNATURE", true)
 	var signature: Dictionary = snapshot.signature
-	_add_label("CLEAN %d // AGGRESSIVE %d // COMMUNITY %d" % [
-		signature.clean, signature.aggressive, signature.community])
+	_add_label("CLEAN %d // AGGRESSIVE %d // COMMUNITY %d // PARTIAL %d" % [
+		signature.clean, signature.aggressive, signature.community, signature.partial])
 	_add_label("Clean: no added Heat. Aggressive: Heat-generating route. "
-		+ "Community: completed clinic work; overlaps either route.")
+		+ "Community: completed clinic work; overlaps either route. "
+		+ "Partial: the job landed, but not cleanly.")
 	var explanation := _content.get_child(_content.get_child_count() - 1) as Label
 	explanation.add_theme_color_override("font_color", COLOR_DIM)
 	if int(signature.clean) + int(signature.aggressive) == 0:

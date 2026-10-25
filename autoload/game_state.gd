@@ -262,7 +262,7 @@ func contact_snapshot() -> Array[Dictionary]:
 	return snapshot
 
 func dossier_snapshot() -> Dictionary:
-	var signature := {"clean": 0, "aggressive": 0, "community": 0}
+	var signature := {"clean": 0, "aggressive": 0, "community": 0, "partial": 0}
 	var operations: Array[Dictionary] = []
 	var expired_offers: Array[Dictionary] = []
 	var heat_band := "BELOW WARNING THRESHOLD"
@@ -275,14 +275,17 @@ func dossier_snapshot() -> Dictionary:
 				"id": contract.id, "code": contract.code, "title": contract.title,
 			})
 			continue
-		if contract.status != &"completed" and contract.status != &"failed":
+		if contract.status != &"completed" and contract.status != &"failed" \
+				and contract.status != &"partial":
 			continue
 		var outcome := "DEADLINE MISSED"
 		if contract.resolution_id != &"deadline_missed":
 			var choice := _choice(contract.complication.choices,
 				StringName(str(contract.resolution_id)))
 			outcome = String(choice.label)
-			if contract.status == &"completed":
+			if contract.status == &"partial":
+				signature.partial += 1
+			elif contract.status == &"completed":
 				if int(choice.heat_delta) == 0:
 					signature.clean += 1
 				elif int(choice.heat_delta) > 0:
